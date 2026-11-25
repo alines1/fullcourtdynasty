@@ -59,7 +59,7 @@
   const NAV = [
     ["Team", [["home", "Overview", "home"], ["roster", "Roster", "roster"], ["schedule", "Schedule", "schedule"], ["recruiting", "Recruiting", "recruiting"], ["portal", "Transfer portal", "recruiting"], ["thistory", "History", "history"]]],
     ["Conference", [["standings", "Standings", "standings"], ["ctour", "Tournament", "bracket"], ["cleaders", "Leaders", "leaders"], ["cawards", "Awards & champions", "awards"]]],
-    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
+    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["recrank", "Recruiting rankings", "recruiting"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
   ];
   function crumb() {
     for (const [g, items] of NAV) for (const [k, n] of items) if (S.view === k) return [g === "Conference" ? L.confs[S.cid ?? T(L.userTid).cid].name : g === "Team" ? T(L.userTid).region : "National", n];
@@ -479,6 +479,43 @@
         ${dShow.length ? table("draft" + s, dcols, dShow, { def: { k: "pick", d: 1 }, rc: (d) => (d.tid === u ? "me" : "") + (d.pick === 30 ? " split" : "") }) : `<p class="mute">${S.sumMine ? "None of your players were drafted." : "No draft this season."}</p>`}
         <p class="mute small">Two rounds of 30 picks by a fictional pro league. Seniors and early entrants are in the pool; teams draft on current ability, upside, age and production.</p></div>
       <div class="card" style="margin-top:16px"><h3>Records set this season</h3>${recs.length ? `<ul class="reclist">${recs.slice(0, 14).join("")}</ul>${recs.length > 14 ? `<p class="mute small">+ ${recs.length - 14} more in the record book</p>` : ""}` : `<p class="mute">No National records fell this season.</p>`}<p class="small" style="margin:8px 0 0"><a data-go="book">Open the record book</a></p></div>`;
+  }
+
+  // ---------- recruiting class rankings ----------
+  function whoById() {
+    const m = new Map();
+    for (const r of L.recruits) m.set(r.pid, { name: r.first + " " + r.last, recruit: true });
+    for (const p of L.players) m.set(p.pid, { name: p.first + " " + p.last, live: true });
+    for (const k in L.alumni || {}) { const a = L.alumni[k]; if (!m.has(a.pid)) m.set(a.pid, { name: a.first + " " + a.last, live: true }); }
+    for (const k in L.past || {}) if (!m.has(+k)) m.set(+k, { name: L.past[k][0] });
+    return m;
+  }
+  function vRecRank() {
+    const RR = S.rr || (S.rr = { season: null, xf: false, cid: "all", tid: null }), u = L.userTid;
+    const past = Object.keys(L.classes || {}).map(Number).sort((a, b) => b - a);
+    const season = RR.season != null && (RR.season === L.season || past.includes(RR.season)) ? RR.season : L.season, live = season === L.season;
+    const all = E.classRankings(L, season, RR.xf), W = whoById();
+    const rows = all.filter((r) => RR.cid === "all" || T(r.tid).cid === +RR.cid);
+    const nm = (pid) => { const w = W.get(pid); return !w ? "–" : w.live ? playerLink({ pid, name: w.name }) : esc(w.name); };
+    const cols = [{ k: "rk", h: "#" }, { k: "team", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid, { rank: false }) }, { k: "conf", h: "Conf", l: 1, v: (r) => C(r.tid).abbrev, f: (r) => esc(C(r.tid).abbrev) },
+      { k: "n", h: "Commits" }].concat(RR.xf ? [{ k: "nx", h: "Transfers" }] : [])
+      .concat([{ k: "s5", h: "5★", v: (r) => r.stars[5], f: (r) => r.stars[5] || "" }, { k: "s4", h: "4★", v: (r) => r.stars[4], f: (r) => r.stars[4] || "" }, { k: "s3", h: "3★", v: (r) => r.stars[3], f: (r) => r.stars[3] || "" },
+        { k: "avg", h: "Avg ★", f: (r) => (r.n ? r.avg.toFixed(2) : "–") }, { k: "score", h: "Points", f: (r) => `<b>${r.score.toFixed(1)}</b>` },
+        { k: "top", h: "Top commit", l: 1, nos: 1, f: (r) => (r.top ? `${nm(r.top.pid)} <span class="mute small">${r.top.pos} · ${stars(r.top.stars)} · No. ${r.top.rank}</span>` : `<span class="mute">–</span>`) }]);
+    const seasonSel = `<select id="rrSeason" class="btn" aria-label="Class">${[L.season].concat(past.filter((y) => y !== L.season)).map((y) => `<option value="${y}" ${y === season ? "selected" : ""}>${seasonLabel(y + 1)} class${y === L.season ? (L.phase === "offseason" ? " (signed)" : " (live)") : ""}</option>`).join("")}</select>`;
+    const confSel = `<select id="rrConf" class="btn" aria-label="Conference"><option value="all">All conferences</option>${L.confs.map((c) => `<option value="${c.cid}" ${String(RR.cid) === String(c.cid) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
+    const xfSeg = `<span class="seg"><button class="${!RR.xf ? "on" : ""}" data-act="rrxf:0">Recruits only</button><button class="${RR.xf ? "on" : ""}" data-act="rrxf:1">With transfers</button></span>`;
+    // class detail for one team (yours by default)
+    const dt = RR.tid != null ? RR.tid : u, d = all.find((r) => r.tid === dt);
+    const teamSel = `<select id="rrTeam" class="btn" aria-label="Team">${L.teams.slice().sort((x, y) => x.region.localeCompare(y.region)).map((t) => `<option value="${t.tid}" ${t.tid === dt ? "selected" : ""}>${esc(t.region)}</option>`).join("")}</select>`;
+    const detail = `<div class="card" style="margin-top:16px"><div class="cardh"><h3>${esc(T(dt).region)} class ${d ? `· No. ${d.rk}` : ""}</h3>${teamSel}</div>${d ? `<div class="scroll"><table><thead><tr><th class="l">Player</th><th>Pos</th><th>Stars</th><th>Natl. rank</th><th class="l">Notes</th></tr></thead><tbody>${d.rec.slice().sort((a, b) => a.rank - b.rank).map((r) => `<tr><td class="l">${nm(r.pid)}</td><td>${r.pos}</td><td>${stars(r.stars)}</td><td>${r.rank}</td><td class="l mute">High school signee</td></tr>`).join("")}${d.xf.map((r) => `<tr><td class="l">${nm(r.pid)}</td><td>${r.pos}</td><td class="mute">–</td><td class="mute">–</td><td class="l mute">Transfer from ${esc(T(r.from).region)} · ovr ${r.ovr}</td></tr>`).join("")}</tbody></table></div>` : `<p class="mute">No commits${RR.xf ? " or transfers" : ""} for this class yet.</p>`}</div>`;
+    const committed = live ? L.recruits.filter((r) => r.commit != null).length : 0;
+    const sub = live ? (L.phase === "offseason" ? `Final signing class. Transfers are added when the portal closes at the start of next season.` : `Live: updates each week as players commit · ${num(committed)} of ${num(L.recruits.length)} recruits committed`) : `Final class, signed in ${seasonLabel(season)}`;
+    return phead("Recruiting rankings", sub, `${seasonSel}${confSel}${xfSeg}`) + `
+      ${rows.length ? table("rr", cols, rows, { def: { k: "score", d: -1 }, limit: RR.cid === "all" ? 100 : 40, rc: (r) => (r.tid === u ? "me" : "") }) : `<p class="mute">No commits yet. Rankings fill in as recruits commit during the season.</p>`}
+      ${RR.cid === "all" && rows.length > 100 ? `<p class="mute small">Showing the top 100 of ${rows.length} classes. Pick a conference to see the rest.</p>` : ""}
+      ${detail}
+      <p class="mute small">Class points add every signee's value best-first, each one counting a little less than the one before, so a few elite players outrank a big class of role players. A recruit's value comes from his stars and national rank; a transfer's from his overall rating. ${past.length ? "" : "Past classes are saved from now on."}</p>`;
   }
 
   // ---------- record book: one sortable sheet of every season or career we have on file ----------
@@ -939,6 +976,7 @@
       case "records": html = vRecords(); break;
       case "summary": html = vSummary(); break;
       case "book": html = vBook(); break;
+      case "recrank": html = vRecRank(); break;
       case "rankings": html = vRankings(); break;
       case "recruiting": html = vRecruiting(); break;
       case "portal": html = vPortal(); break;
@@ -1018,6 +1056,7 @@
     else if (k === "rs") { const [pid, on] = v.split(":"); if (E.setRedshirt(L, +pid, on === "1")) { render(); persist(); toast(on === "1" ? "Redshirted: he'll sit this season and keep a year of eligibility" : "Redshirt removed"); } else toast("He can't be redshirted now (more than 4 games played, or he already used one)."); }
     else if (k === "sumseason") { S.sumSeason = +v; render(); }
     else if (k === "summine") { S.sumMine = v === "1"; render(); }
+    else if (k === "rrxf") { S.rr.xf = v === "1"; render(); }
     else if (k === "bkmore") { S.bk.n += 100; render(); }
     else if (k === "bkall") { S.bk.n = 1e9; render(); }
     else if (k === "recmode") { S.recMode = v; render(); }
@@ -1223,6 +1262,9 @@
   document.addEventListener("input", (e) => { if (e.target.id === "rq") { S.rf.q = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(() => { render(); const el = $("rq"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250); } });
   document.addEventListener("change", (e) => {
     const id = e.target.id;
+    if (id === "rrSeason") { S.rr.season = +e.target.value; render(); return; }
+    if (id === "rrConf") { S.rr.cid = e.target.value; render(); return; }
+    if (id === "rrTeam") { S.rr.tid = +e.target.value; render(); return; }
     if (id === "rySel") { go(`teamyr:${e.target.dataset.tid}:${e.target.value}`); return; }
     if (e.target.dataset && e.target.dataset.bk) {
       const k = e.target.dataset.bk, B = S.bk; B[k] = e.target.value; B.n = 100;

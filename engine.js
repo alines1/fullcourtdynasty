@@ -1297,7 +1297,30 @@
       else if (from === u) news(L, `${p.first} ${p.last} transfers from ${L.teams[u].region} to ${L.teams[best].region}.`, true);
     }
     for (const p of L.players) delete p.why;
+    (L.xfers || (L.xfers = {}))[P.season] = P.moves.filter((m) => !m.back).map((m) => [m.to, m.pid, m.ovr, m.from, POS.indexOf(m.pos)]);
     P.done = true;
+  }
+  // ---------- recruiting class rankings ----------
+  // A commit is worth its star level plus a bonus for top national ranks; a transfer is valued from his overall rating.
+  // A class score adds them best-first with each one counting a little less (88% of the one before), so a few elite players beat a pile of depth.
+  const recValue = (stars, rank) => [0, 20, 40, 60, 80, 100][stars] + Math.max(0, 60 - rank) / 6;
+  const xferValue = (ovr) => clamp(20 + (ovr - 40) * 2.4, 10, 105);
+  function classRankings(L, season, withTransfers) {
+    const cur = season === L.season;
+    const commits = cur ? L.recruits.filter((r) => r.commit != null).map((r) => [r.commit, r.pid, r.stars, r.rank, POS.indexOf(r.pos)]) : (L.classes || {})[season] || [];
+    const xf = withTransfers ? ((L.xfers || {})[season] || []) : [];
+    const T = new Map();
+    const get = (tid) => T.get(tid) || (T.set(tid, { tid, rec: [], xf: [], stars: [0, 0, 0, 0, 0, 0] }), T.get(tid));
+    for (const [tid, pid, st, rank, pos] of commits) { const x = get(tid); x.rec.push({ pid, stars: st, rank, pos: POS[pos], v: recValue(st, rank) }); x.stars[st]++; }
+    for (const [tid, pid, ovr, from, pos] of xf) get(tid).xf.push({ pid, ovr, from, pos: POS[pos], v: xferValue(ovr) });
+    const rows = [...T.values()].map((x) => {
+      const all = x.rec.map((r) => r.v).concat(x.xf.map((r) => r.v)).sort((a, b) => b - a);
+      const score = all.reduce((s, v, i) => s + v * Math.pow(0.88, i), 0);
+      const avg = x.rec.length ? x.rec.reduce((s, r) => s + r.stars, 0) / x.rec.length : 0;
+      return Object.assign(x, { n: x.rec.length, nx: x.xf.length, avg, score: Math.round(score * 10) / 10, top: x.rec.slice().sort((a, b) => a.rank - b.rank)[0] || null });
+    }).filter((r) => r.n + r.nx > 0).sort((a, b) => b.score - a.score);
+    rows.forEach((r, i) => (r.rk = i + 1));
+    return rows;
   }
   function startNextSeason(L) {
     if (L.phase !== "offseason") return;
@@ -1322,6 +1345,7 @@
     }
     L.injList = [];
     recap.improved.sort((a, b) => b.d - a.d);
+    (L.classes || (L.classes = {}))[L.season] = L.recruits.filter((r) => r.commit != null).map((r) => [r.commit, r.pid, r.stars, r.rank, POS.indexOf(r.pos)]);
     for (const rc of L.recruits) {
       if (rc.commit == null) continue;
       const p = { pid: rc.pid, tid: rc.commit, first: rc.first, last: rc.last, pos: rc.pos, yr: 1, hgt: rc.hgt, town: rc.town, geo: rc.geo ?? null, r: rc.r, ovr: rc.ovr, pot: rc.pot, stats: {}, depth: 99, jersey: rc.jersey, stars: rc.stars, rank: rc.rank };
@@ -1475,7 +1499,7 @@
     return o;
   }
 
-  const api = { openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
+  const api = { classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
     RKEYS, RNAMES, POS, YR, MINUTES, DAYS, NCAA_ROUNDS, REGIONS, STAR_OVR,
     newWorld, claimSchool, newLeague, simGame, applyBox, playDay, playOneGame, gamesLeftToday, stageMatches, playNextUserGame, playDays, playWeek, playUntil, playToEnd, startNextSeason,
     confStandings, roster, autoDepth, calcOvr, teamRating, power, netRanks, updatePoll, selectField, expectations, blankLine, dayDate, dayOffset,
