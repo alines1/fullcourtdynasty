@@ -211,7 +211,7 @@
   // ---------- roster / player ----------
   function vRoster(tid) {
     const t = T(tid), mine = tid === L.userTid, ps = E.roster(L, tid);
-    const id = "roster" + (S.rmode === "ratings" ? "R" : "S"), sorted = S.sort[id] && S.sort[id].k !== "rot";
+    const id = "rosterS", sorted = S.sort[id] && S.sort[id].k !== "rot";
     const base = [
       { k: "rot", h: "Rot", v: (p) => p.depth, f: (p) => (mine && !sorted ? `<span class="mv"><button data-act="up:${p.pid}" ${p.depth === 0 ? "disabled" : ""} aria-label="Move up">↑</button><button data-act="down:${p.pid}" ${p.depth === ps.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button></span> ` : "") + (p.depth + 1) },
       { k: "name", h: "Name", l: 1, v: (p) => p.last, f: (p) => plink(p) },
@@ -223,17 +223,14 @@
       { k: "mpg", h: "Min", t: "Planned minutes from rotation spot", v: (p) => E.MINUTES[p.depth] || 0, f: (p) => E.MINUTES[p.depth] || 0 },
       { k: "ovr", h: "Ovr", f: (p) => `<b>${p.ovr}</b>` }, { k: "pot", h: "Pot" },
     ];
-    const extra = S.rmode === "ratings"
-      ? E.RKEYS.map((k) => ({ k, h: { ins: "INS", mid: "MID", tp: "3PT", ft: "FT", hdl: "HDL", pas: "PAS", reb: "REB", per: "PER", int: "IND", blk: "BLK", ath: "ATH" }[k], t: E.RNAMES[k], v: (p) => p.r[k], f: (p) => p.r[k] }))
-      : [["gp", "GP"], ["min", "MPG"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]].map(([k, h]) => ({ k, h, v: (p) => statVal(curStats(p), k), f: (p) => (k === "gp" ? curStats(p)?.gp || 0 : f1(statVal(curStats(p), k))) }))
+    const extra = [["gp", "GP"], ["min", "MPG"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]].map(([k, h]) => ({ k, h, v: (p) => statVal(curStats(p), k), f: (p) => (k === "gp" ? curStats(p)?.gp || 0 : f1(statVal(curStats(p), k))) }))
         .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s && s[a] ? s[m] / s[a] : -1; }, f: (p) => { const s = curStats(p); return s ? pct(s[m], s[a]) : "–"; } })));
     const inc = L.recruits.filter((r) => r.commit === tid).sort((a, b) => a.rank - b.rank);
     return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${t.city ? esc(t.city) + " · " : ""}${esc(C(tid).name)} · ${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
-      <div class="tools"><span class="seg"><button class="${S.rmode === "ratings" ? "on" : ""}" data-act="rmode:ratings">Ratings</button><button class="${S.rmode === "stats" ? "on" : ""}" data-act="rmode:stats">Season stats</button></span>
-      <button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
+      <div class="tools"><button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
       ${table(id, base.concat(extra), ps, { rc: (p) => (p.depth < 5 ? "start" : "") + (p.depth === 4 ? " split" : "") })}
       ${inc.length ? `<h3 style="margin-top:18px">Committed for next season</h3><p>${inc.map((r) => `${stars(r.stars)} ${esc(r.first + " " + r.last)} <span class="mute">${r.pos} · No. ${r.rank}</span>`).join(" &nbsp; ")}</p>` : ""}
-      <p class="mute small">INS inside scoring · MID mid-range · 3PT three-point · HDL ball handling · PAS passing · REB rebounding · PER perimeter defense · IND interior defense · BLK shot blocking · ATH athleticism. Pot is a rough ceiling. Injured and redshirted players are skipped in the rotation automatically. A player can be redshirted once in his career, before he's played more than 4 games that season.</p>`;
+      <p class="mute small">Ovr is a player's current overall rating and Pot his rough ceiling; open a player for his full ratings. Stats are per game this season. Injured and redshirted players are skipped in the rotation automatically. Freshmen can be redshirted before they've played more than 4 games; a player who misses the season injured gets a medical redshirt automatically.</p>`;
   }
   function statVal(s, k) { if (!s || !s.gp) return 0; if (k === "reb") return (s.orb + s.drb) / s.gp; if (k === "gp") return s.gp; return s[k] / s.gp; }
   function vPlayer(pid) {
@@ -362,7 +359,8 @@
   function vConfTour() {
     const cid = S.cid ?? T(L.userTid).cid, c = L.confs[cid], br = L.ct && L.ct[cid];
     const sub = br ? (br.champ != null ? `Champion: ${tlink(br.champ)}` : "In progress · winner takes the automatic tournament bid") : L.phase === "regular" ? "Projected from current standings · starts after the regular season" : "";
-    return phead(`${esc(c.abbrev)} tournament`, sub, confSel(cid)) + (L.phase === "conftour" ? postCtl() : "") + confBracket(cid, br);
+    const champ = br && br.champ != null ? (() => { const fin = br.rounds[br.rounds.length - 1][0], opp = fin ? (fin.a === br.champ ? fin.b : fin.a) : null, sc = fin && fin.sc ? `${Math.max(...fin.sc)}–${Math.min(...fin.sc)}` : ""; return `<div class="champ" style="margin:0 0 18px">${logo(T(br.champ), 42)}<div><b style="font-size:18px">${tlink(br.champ, { rank: false })} won the ${esc(c.abbrev)} tournament</b><div class="mute small">${opp != null ? `Beat ${esc(T(opp).region)} ${sc} in the final · ` : ""}automatic bid to the National Tournament${L.ncaa && L.ncaa.seedOf[br.champ] ? ` as a No. ${L.ncaa.seedOf[br.champ]} seed` : ""}</div></div></div>`; })() : "";
+    return phead(`${esc(c.abbrev)} tournament`, sub, confSel(cid)) + (L.phase === "conftour" ? postCtl() : "") + champ + confBracket(cid, br);
   }
   function sideOf(tid, seed, m, i) {
     if (tid == null) return null;
@@ -658,6 +656,15 @@
   }
 
   // ---------- tournament ----------
+  // conference tournament champions: shown on Selection Day until the first National Tournament game, and in the Field tab
+  function champsCard(N, always) {
+    if (!L.ct || N.projected) return "";
+    if (!always && L.games.some((g) => g.type === "ncaa" && g.played)) return "";
+    const u = L.userTid, mc = T(u).cid;
+    const rows = L.confs.slice().sort((a, b) => (a.cid === mc ? -1 : b.cid === mc ? 1 : a.name.localeCompare(b.name))).map((c) => { const br = L.ct[c.cid]; if (!br || br.champ == null) return ""; const ch = br.champ, fin = br.rounds[br.rounds.length - 1][0]; const opp = fin ? (fin.a === ch ? fin.b : fin.a) : null; const sc = fin && fin.sc ? `${Math.max(...fin.sc)}–${Math.min(...fin.sc)}` : ""; return `<tr class="${c.cid === mc ? "me" : ""}"><td class="l"><a data-act="ctgo:${c.cid}">${esc(c.name)}</a></td><td class="l"><b>${tlink(ch, { rank: false })}</b></td><td class="l mute">${opp != null ? `beat ${esc(T(opp).region)} ${sc}` : ""}</td><td>${N.seedOf[ch] ?? "–"}</td></tr>`; }).join("");
+    const mine = L.ct[mc] && L.ct[mc].champ;
+    return `<div class="card" style="margin:0 0 18px"><div class="cardh"><h3>Conference tournament champions</h3><span class="mute small">Each one earned an automatic bid</span></div>${mine != null ? `<p>${mine === u ? `<b>You won the ${esc(L.confs[mc].abbrev)} tournament.</b>` : `${tlink(mine, { rank: false })} won the ${esc(L.confs[mc].abbrev)} tournament.`}</p>` : ""}<details${always ? " open" : ""}><summary class="small" style="cursor:pointer;font-weight:700">All ${L.confs.length} champions</summary><div class="scroll"><table><thead><tr><th class="l">Conference</th><th class="l">Champion</th><th class="l">Final</th><th>Seed</th></tr></thead><tbody>${rows}</tbody></table></div></details></div>`;
+  }
   function vTourney() {
     const N = L.ncaa || projField();
     const u = L.userTid, us = N.seedOf[u];
@@ -668,11 +675,11 @@
     if (view === "full") body = fullBracket(N);
     else if (view === "ff") body = `<div class="scroll"><div class="brwrap">${finalFour(N, true)}</div></div>`;
     else if (view === "or") body = orList(N);
-    else if (view === "field") body = fieldList(N);
+    else if (view === "field") body = champsCard(N, true) + fieldList(N);
     else body = `<div class="scroll"><div class="brwrap">${regionTree(N, +view.slice(1), "ltr")}</div></div>`;
     const myLine = us ? `${esc(T(u).region)} ${N.projected ? "projects as" : "is"} a <b>${us} seed</b> in the ${E.REGIONS[regionOf(N, u)]}${N.or.some((m) => m.a === u || m.b === u) ? " (Opening Round)" : ""}.` : `${esc(T(u).region)} ${N.projected ? "is projected to miss the field" : "missed the field"}.`;
     return `<div class="phead"><div><h1>${N.projected ? "Projected field" : `${L.season} National Tournament`}</h1><p>${N.projected ? "Projected from current NET and conference leaders. The real field is picked on Selection Day. " : ""}${myLine}</p></div>${N.champ != null ? `<div class="champ">${logo(T(N.champ), 40)}<div><span class="mute small">National champion</span><br><b>${tlink(N.champ)}</b></div></div>` : ""}</div>
-      ${L.ncaa ? postCtl() : ""}<div class="seg wrap" role="tablist">${tabs.map(([k, n]) => `<button class="${view === k ? "on" : ""}" data-act="br:${k}">${n}</button>`).join("")}</div>
+      ${L.ncaa ? postCtl() : ""}${view === "field" ? "" : champsCard(N)}<div class="seg wrap" role="tablist">${tabs.map(([k, n]) => `<button class="${view === k ? "on" : ""}" data-act="br:${k}">${n}</button>`).join("")}</div>
       <p class="mute small">76 teams: 32 automatic bids and 44 at-large. The 12 lowest-seeded automatic qualifiers and the 12 lowest-seeded at-large teams play six Opening Round games each; winners join the Round of 64.</p>
       ${body}`;
   }
@@ -981,6 +988,7 @@
     else if (k === "newseason") { E.startNextSeason(L); S.view = "home"; projCache = null; render(); persist(); showRecap(); }
     else if (k === "rmode") { S.rmode = v; render(); }
     else if (k === "go") { go(v); }
+    else if (k === "ctgo") { S.cid = +v; go("ctour"); }
     else if (k === "tour") { if (v === "end") { L.tourDone = true; closeModal(); persist(); } else tour(+v); }
     else if (k === "savefile") saveFile();
     else if (k === "loadfile") $("saveFile")?.click();
@@ -1089,8 +1097,9 @@
       S.cid = null; go("ctour");
       toast(seed ? `Conference tournament time: you're the No. ${seed} seed` : "Conference tournaments have started. You didn't qualify.");
     } else if (ph === "ncaa") {
-      const s = L.ncaa.seedOf[u]; S.br = null; go("tourney");
-      toast(s ? `Selection Day: you're a No. ${s} seed in the ${E.REGIONS[regionOf(L.ncaa, u)]}` : "Selection Day: you're not in the field");
+      const s = L.ncaa.seedOf[u], cid = T(u).cid, ch = L.ct && L.ct[cid] ? L.ct[cid].champ : null; S.br = null; go("tourney");
+      const won = ch == null ? "" : ch === u ? `You won the ${L.confs[cid].abbrev} tournament! ` : `${T(ch).region} won the ${L.confs[cid].abbrev} tournament. `;
+      toast(won + (s ? `You're a No. ${s} seed in the ${E.REGIONS[regionOf(L.ncaa, u)]}` : "You're not in the National Tournament field"));
     } else if (ph === "offseason") {
       const h = L.history[L.history.length - 1]; S.sumSeason = null; go("summary");
       toast(`${T(h.champ).region} are national champions`);

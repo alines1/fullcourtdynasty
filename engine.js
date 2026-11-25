@@ -915,7 +915,7 @@
 
   // ---------- redshirts ----------
   // A player can sit out one season without using a year of eligibility, if he hasn't played more than 4 games that season.
-  function canRedshirt(L, p) { const s = p.stats[L.season]; return !p.rsUsed && L.phase === "regular" && (!s || s.gp <= 4); }
+  function canRedshirt(L, p) { const s = p.stats[L.season]; return p.yr === 1 && !p.rsUsed && !p.transfer && L.phase === "regular" && (!s || s.gp <= 4); } // freshmen only; injured players of any class can still get a medical redshirt
   function setRedshirt(L, pid, on) {
     const p = playerById(L, pid); if (!p) return false;
     if (on) { if (!canRedshirt(L, p)) return false; p.rs = true; }
