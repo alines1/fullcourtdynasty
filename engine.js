@@ -1027,9 +1027,11 @@
   // Like real drafts, young high-ceiling players go first; seniors are proven but have less room to grow.
   const PRO_YOUTH = [0, 4, 3, 1.5, 0, -1];
   function proScore(L, p) {
-    const s = p.stats[L.season], ppg = s && s.gp ? s.pts / s.gp : 0;
+    const s = p.stats[L.season], ppg = s && s.gp ? s.pts / s.gp : 0, mpg = s && s.gp ? s.min / s.gp : 0;
     if (p.dn == null) p.dn = Math.round(gauss(0, 2.5) * 10) / 10; // scouts' lasting opinion of him
-    return 0.45 * p.ovr + 0.55 * p.pot + (PRO_YOUTH[p.yr] ?? -1) + ppg * 0.12 + (p.hgt - 78) * 0.35 + p.dn;
+    // production matters: scorers rise, and a player who barely got off the bench is hard to project
+    const prod = (ppg - 9) * 0.2 - Math.max(0, 20 - mpg) * 0.18;
+    return 0.45 * p.ovr + 0.55 * p.pot + (PRO_YOUTH[p.yr] ?? -1) + prod + (p.hgt - 78) * 0.35 + p.dn;
   }
   function decideDepartures(L) {
     const u = L.userTid;
@@ -1041,7 +1043,10 @@
       if (p.yr >= 4) { p.leave = "grad"; continue; }
       const r = p.proj;
       // projected high picks almost always go; fringe prospects usually stay; a few leave too early anyway
-      const go = r <= 5 ? 0.97 : r <= 14 ? 0.92 : r <= 30 ? 0.8 : r <= 45 ? 0.5 : r <= 60 ? 0.3 : r <= 90 ? 0.12 : r <= 150 ? 0.03 : 0;
+      let go = r <= 5 ? 0.97 : r <= 14 ? 0.92 : r <= 30 ? 0.8 : r <= 45 ? 0.5 : r <= 60 ? 0.3 : r <= 90 ? 0.12 : r <= 150 ? 0.03 : 0;
+      // players who didn't produce usually come back to prove themselves
+      const st = p.stats[L.season], ppg = st && st.gp ? st.pts / st.gp : 0;
+      if (ppg < 5) go *= 0.2; else if (ppg < 8) go *= 0.55; else if (ppg < 11) go *= 0.85;
       if (R() < go) { p.leave = "early"; if (p.tid === u) news(L, `${p.first} ${p.last} declares for the pro draft${p.yr === 1 ? " after one season" : ""}${r <= 30 ? ` (projected first-round pick)` : ""}.`, true); }
     }
     for (const p of L.players) delete p.proj;
