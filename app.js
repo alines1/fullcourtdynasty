@@ -58,7 +58,7 @@
   const NAV = [
     ["Team", [["home", "Overview", "home"], ["roster", "Roster", "roster"], ["schedule", "Schedule", "schedule"], ["recruiting", "Recruiting", "recruiting"], ["portal", "Transfer portal", "recruiting"], ["tstats", "Team stats", "stats"], ["thistory", "History", "history"]]],
     ["Conference", [["standings", "Standings", "standings"], ["ctour", "Tournament", "bracket"], ["cleaders", "Leaders", "leaders"], ["cawards", "Awards & champions", "awards"]]],
-    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["hpi", "HPI", "stats"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
+    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
   ];
   function crumb() {
     for (const [g, items] of NAV) for (const [k, n] of items) if (S.view === k) return [g === "Conference" ? L.confs[S.cid ?? T(L.userTid).cid].name : g === "Team" ? T(L.userTid).region : "National", n];
@@ -147,7 +147,7 @@
     let main;
     if (L.phase === "offseason") {
       const h = L.history[L.history.length - 1], uh = h.user, A = (L.awards || {})[L.season] || {};
-      const n = (x) => (x ? `${L.players.some((p) => p.pid === x.pid) ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)}</span>` : "–");
+      const n = (x) => (x ? `${playerLink(x)} <span class="mute">${esc(x.abbrev)}</span>` : "–");
       main = `<div class="card hero"><div class="cardh"><h3>Season complete</h3><span class="mute small">${seasonLabel(L.season)}</span></div>
         <p>${esc(t.region)} finished <b>${uh.w}–${uh.l}</b>, ${ordinal(uh.seed)} in the ${esc(C(u).name)}. ${uh.ncaa >= 0 ? `National Tournament: ${ncaaResult(uh.ncaa)} as a ${uh.nseed} seed.` : "No National Tournament bid."}</p>
         <table class="tape"><tbody><tr><td class="l mute">National champion</td><td class="l"><b>${tlink(h.champ, { rank: false })}</b> over ${tlink(h.runner, { rank: false })}</td></tr><tr><td class="l mute">Player of the Year</td><td class="l">${n(A.poy)}</td></tr><tr><td class="l mute">Freshman of the Year</td><td class="l">${n(A.foy)}</td></tr><tr><td class="l mute">Most Outstanding Player</td><td class="l">${n(A.mop)}</td></tr></tbody></table>
@@ -161,7 +161,6 @@
       main = `<div class="card hero"><div class="cardh"><h3>Next game</h3><span class="mute small">${fmtDay(ng.day)} · ${where}</span></div>
         <div class="score"><div class="t">${logo(t, 48)}<div><b class="big2">${rkTag(u)}${esc(t.region)}</b><div class="mute small">${recStr(u)} · NET ${NET[u]}</div></div></div><div class="vs">${home || ng.neutral ? "vs" : "at"}</div><div class="t r"><div><b class="big2">${rkTag(opp)}<a data-go="team:${opp}">${esc(T(opp).region)}</a></b><div class="mute small">${recStr(opp)} · NET ${NET[opp]}</div></div>${logo(T(opp), 48)}</div></div>
         ${a.gp && b.gp ? `<table class="tape"><tbody>${row("Points", a.ppg, b.ppg, "hi", f1, "ppg")}${row("Allowed", a.opp, b.opp, "lo", f1, "opp")}${row("FG%", a.fg, b.fg, "hi", f1, "fg")}${row("3P%", a.tp, b.tp, "hi", f1, "tp")}${row("Rebounds", a.reb, b.reb, "hi", f1, "reb")}${row("Turnovers", a.tov, b.tov, "lo", f1, "tov")}${row("Team rating", E.teamRating(L, u), E.teamRating(L, opp), "hi", (v) => v, "tr")}</tbody></table>` : `<table class="tape"><tbody>${row("Team rating", E.teamRating(L, u), E.teamRating(L, opp), "hi", (v) => v, "tr")}${row("Prestige", t.prestige, T(opp).prestige, "hi", (v) => v, "pr")}</tbody></table>`}
-        ${(() => { const hm = ng.home, pr = E.predict(L, ng.home, ng.away, ng.neutral), uh = ng.home === u, us = uh ? pr.hs : pr.as, them = uh ? pr.as : pr.hs, wp = uh ? pr.pHome : 1 - pr.pHome; const fav = us >= them; return `<p class="proj"><span class="mute">HPI projection</span> <b>${esc(T(fav ? u : opp).region)}</b> ${Math.round(Math.max(us, them))}–${Math.round(Math.min(us, them))} · ${Math.round(pr.tempo)} possessions · <b class="${wp >= 0.5 ? "W" : "L"}">${Math.round(wp * 100)}%</b> chance you win</p>`; })()}
         <div class="tools" style="margin:14px 0 0"><button class="btn play" data-act="next">Play game</button><button class="btn" data-act="week">Sim a week</button><button class="btn" data-go="team:${opp}">Scout ${esc(T(opp).abbrev)}</button></div></div>`;
     } else {
       main = `<div class="card hero"><div class="cardh"><h3>${L.phase === "ncaa" && L.ncaa.seedOf[u] == null ? "Not in the field this year" : "Your season is over"}</h3></div><p class="mute">Follow the rest of the postseason one game at a time, or skip ahead.</p>${postCtl()}</div>`;
@@ -537,79 +536,13 @@
       <div class="card" style="margin-top:22px"><h3>Disclaimer</h3><p class="small">All schools, players, mascots, conferences and pro teams are fictional. The default world places its schools in real college towns, but no school, mascot or conference is real. Full Court Dynasty is not affiliated with, endorsed by, or sponsored by the NCAA, any college or university, conference, or professional league. Team names you import yourself stay in your own save.</p></div></div></div>`;
   }
 
-  // ---------- Hardwood Power Index ----------
-  // [key, label, higher is better, tooltip, decimals, format]
-  const HPI_COLS = {
-    overview: [
-      ["score", "HPI", 1, "HPI score, 0–100. 50 is an average team; the 90s are title contenders", 1],
-      ["expW", "Exp. record", 1, "Record HPI expected from this schedule, game by game", 0, "rec"],
-      ["adjO", "Offense", 1, "Points scored per 100 possessions against an average defense, adjusted for opponent and venue"],
-      ["adjD", "Defense", 0, "Points allowed per 100 possessions against an average offense, adjusted for opponent and venue"],
-      ["adjT", "Pace", 2, "Possessions per game against an average opponent"],
-      ["sched", "Schedule", 1, "Average HPI score of opponents played"],
-      ["ncsched", "Non-conf", 1, "Average HPI score of non-conference opponents"],
-      ["fortune", "Fortune", 1, "Wins above (or below) what HPI expected game by game. Big positive numbers often regress", 1, "pm"],
-      ["consist", "Consistency", 0, "How much game-to-game performance swings (points per 100 possessions). Lower is steadier", 1, "pmabs"],
-      ["momentum", "Momentum", 1, "Last 10 games compared with the season as a whole (points per 100 possessions)", 1, "pm"],
-      ["clutch", "Close games", 1, "Record in games decided by 5 or fewer points or in overtime", 0, "close"],
-    ],
-    four: [["efg", "Shooting", 1, "Effective FG%: field goal % with threes worth 1.5"], ["tov", "Ball security", 0, "Turnovers per 100 possessions"], ["orb", "Off. rebounding", 1, "Share of its own misses the offense rebounds"], ["ftr", "Free throws", 1, "Free throw attempts per 100 shots"], ["defg", "Opp. shooting", 0, "Opponents' effective FG%"], ["dtov", "Forced TOs", 1, "Opponent turnovers per 100 possessions"], ["dreb", "Def. rebounding", 1, "Share of opponents' misses the defense rebounds"], ["dftr", "Opp. free throws", 0, "Opponents' free throw attempts per 100 shots"]],
-    style: [["rawT", "Possessions", 2, "Raw possessions per game"], ["tpr", "3PA share", 2, "Share of shots that are threes"], ["tp", "3P%", 1, "Three-point %"], ["twp", "2P%", 1, "Two-point %"], ["ft", "FT%", 1, "Free throw %"], ["dtp", "Opp. 3P%", 0, "Opponents' three-point %"], ["ast", "Assisted", 1, "Share of made shots that were assisted"], ["blk", "Blocks", 1, "Share of opponent twos blocked"], ["stl", "Steals", 1, "Steals per 100 opponent possessions"], ["hgt", "Height", 2, "Average height, weighted by minutes", 0, "hgt"], ["exp", "Experience", 2, "Average years in college, weighted by minutes", 2], ["bench", "Bench min.", 2, "Share of minutes played by non-starters"]],
-  };
-  function hpiRows() { const H = E.hpi(L); for (const r of H.rows) r.dreb = 100 - r.dorb; return H; }
-  function hpiRanks(rows) {
-    const rk = {}, n = rows.length;
-    for (const cols of Object.values(HPI_COLS)) for (const [k, , hi] of cols) {
-      if (rk[k]) continue; const s = rows.slice().sort((x, y) => (hi ? y[k] - x[k] : x[k] - y[k])), m = {};
-      let prev = null, r = 0; s.forEach((x, i) => { const v = Math.round(x[k] * 100); if (v !== prev) { r = i + 1; prev = v; } m[x.tid] = r; }); rk[k] = m;
-    }
-    rk.n = n;
-    return rk;
-  }
-  const band = (rank, n) => { const p = 1 - (rank - 1) / Math.max(1, n - 1); return p >= 0.9 ? 5 : p >= 0.7 ? 4 : p >= 0.3 ? 3 : p >= 0.1 ? 2 : 1; };
-  const BAND_NAME = ["", "Bottom 10%", "Below average", "Average", "Top 30%", "Top 10%"];
-  const NEUTRAL = new Set(Object.values(HPI_COLS).flat().filter((c) => c[2] === 2).map((c) => c[0]));
-  const chip = (rank, n, k) => (NEUTRAL.has(k) ? `<span class="bnd bn" title="${ordinal(rank)} of ${n} (highest to lowest)">${rank}</span>` : `<span class="bnd b${band(rank, n)}" title="${ordinal(rank)} of ${n} · ${BAND_NAME[band(rank, n)]}">${rank}</span>`);
-  function hpiVal(r, k, d, f) {
-    const v = r[k];
-    if (f === "rec") return `${Math.round(r.expW)}–${Math.round(r.expL)}`;
-    if (f === "close") return `${r.cw}–${r.cl}`;
-    if (f === "hgt") return hgt(Math.round(v));
-    if (f === "pm") return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d ?? 1);
-    if (f === "pmabs") return "±" + v.toFixed(d ?? 1);
-    return v.toFixed(d ?? 1);
-  }
-  function profileBars(tid, H, rk) {
-    const r = H.rows[tid], items = [["score", "HPI score", 1], ["adjO", "Offense"], ["adjD", "Defense"], ["adjT", "Pace"], ["consist", "Consistency", 1, "pmabs"], ["momentum", "Momentum", 1, "pm"], ["sched", "Schedule"]];
-    return items.map(([k, lab, d, f]) => { const rank = rk[k][tid], p = 1 - (rank - 1) / Math.max(1, rk.n - 1); return `<div class="pb"><span>${lab}</span><span class="pbv">${hpiVal(r, k, d, f)}</span><span class="pbar"><i class="${NEUTRAL.has(k) ? "bn" : "b" + band(rank, rk.n)}" style="width:${Math.max(3, p * 100).toFixed(0)}%"></i></span>${chip(rank, rk.n, k)}</div>`; }).join("");
-  }
-  function vHPI() {
-    const H = hpiRows(), rk = hpiRanks(H.rows), tab = S.hpiTab || "overview", scope = S.hpiConf ?? "all", u = L.userTid;
-    const rows = H.rows.filter((r) => scope === "all" || String(T(r.tid).cid) === scope);
-    const cols = [
-      { k: "rk", h: "#", v: (r) => rk.score[r.tid], f: (r) => rk.score[r.tid] },
-      { k: "team", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid) },
-      { k: "conf", h: "Conf", l: 1, v: (r) => C(r.tid).abbrev, f: (r) => esc(C(r.tid).abbrev) },
-      { k: "wl", h: "W–L", v: (r) => r.w / Math.max(1, r.w + r.l), f: (r) => `${r.w}–${r.l}` },
-    ].concat(HPI_COLS[tab].map(([k, h, hi, t, d, f]) => ({ k, h, t, v: (r) => r[k] * (hi === 0 ? -1 : 1), f: (r) => (k === "score" ? `<b class="hs">${hpiVal(r, k, d, f)}</b>` : `<span class="hv">${hpiVal(r, k, d, f)}</span>`) + chip(rk[k][r.tid], rk.n, k) })));
-    const tabs = [["overview", "Overview"], ["four", "Four factors"], ["style", "Shooting & style"]];
-    const sub = H.games ? `${H.games.toLocaleString()} games · National average: ${H.avgE.toFixed(1)} points per 100 possessions, ${H.avgT.toFixed(1)} possessions per game` : "Preseason: built from roster strength until real results take over";
-    const opts = `<select id="hpiConf" class="btn" aria-label="Conference"><option value="all">All teams</option>${L.confs.map((c) => `<option value="${c.cid}" ${scope === String(c.cid) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
-    return phead("Hardwood Power Index", sub, opts) + `
-      <div class="card" style="margin-bottom:16px"><div class="cardh"><h3>${esc(T(u).region)} profile</h3><span class="mute small">${ordinal(rk.score[u])} of ${rk.n} · 0–100 scale, 50 = average D1 team</span></div>${profileBars(u, H, rk)}</div>
-      <div class="tools"><span class="seg">${tabs.map(([k2, n]) => `<button class="${tab === k2 ? "on" : ""}" data-act="hpitab:${k2}">${n}</button>`).join("")}</span><span class="legend">${[5, 4, 3, 2, 1].map((b) => `<span class="bnd b${b}">${BAND_NAME[b]}</span>`).join("")}</span></div>
-      <div class="hpi">${table("hpi-" + tab, cols, rows, { def: { k: "rk", d: 1 }, rc: (r) => (r.tid === u ? "me" : "") })}</div>
-      <details class="card gloss" style="margin-top:16px"><summary><b>How HPI works</b></summary>
-        <p>HPI starts by turning every game into points per 100 possessions, so fast and slow teams can be compared fairly. Each team's offense and defense are then adjusted for the opponents it faced and for home court, and the adjustments repeat until they settle. Before the season, a roster-strength estimate fills in and fades out as results arrive.</p>
-        <p>The <b>HPI score</b> turns the gap between offense and defense into a 0–100 scale: 50 is an average team, the 80s are National Tournament locks, and the 90s are title contenders. <b>Fortune</b> counts wins above or below what HPI expected game by game. <b>Consistency</b> shows how much a team's level swings from night to night, and <b>Momentum</b> compares the last 10 games with the season. The colored chips show each value's national rank, and the color shows the band it falls in. Style stats like pace, three-point share and height stay gray, since more isn't better or worse.</p></details>`;
-  }
   // ---------- rankings ----------
   function vRankings() {
     const P = L.poll;
-    const ap = P ? P.top.map((tid, i) => { const pr = P.prev[tid]; const mv = !pr ? `<span class="mute">new</span>` : pr === i + 1 ? `<span class="mute">–</span>` : pr > i + 1 ? `<span class="W">▲${pr - i - 1}</span>` : `<span class="L">▼${i + 1 - pr}</span>`; return `<tr class="${tid === L.userTid ? "me" : ""}"><td>${i + 1}</td><td>${mv}</td><td class="l">${tlink(tid, { rank: false })}</td><td class="l mute">${esc(C(tid).abbrev)}</td><td>${recStr(tid)}</td><td>${NET[tid]}</td></tr>`; }).join("") : "";
+    const ap = P ? P.top.map((tid, i) => { const pr = P.prev[tid]; const mv = !pr ? `<span class="mute">new</span>` : pr === i + 1 ? `<span class="mute">–</span>` : pr > i + 1 ? `<span class="mute">▲${pr - i - 1}</span>` : `<span class="mute">▼${i + 1 - pr}</span>`; return `<tr class="${tid === L.userTid ? "me" : ""}"><td>${i + 1}</td><td>${mv}</td><td class="l">${tlink(tid, { rank: false })}</td><td class="l mute">${esc(C(tid).abbrev)}</td><td>${recStr(tid)}</td><td>${NET[tid]}</td></tr>`; }).join("") : "";
     const pw = E.power(L);
     const rows = L.teams.filter((t) => S.rk.cid === "all" || String(t.cid) === S.rk.cid).map((t) => ({ tid: t.tid, net: NET[t.tid], pw: pw[t.tid], w: L.rec[t.tid].w, l: L.rec[t.tid].l, conf: C(t.tid).abbrev, pr: t.prestige, tr: E.teamRating(L, t.tid) }));
-    const cols = [{ k: "net", h: "NET" }, { k: "t", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid) }, { k: "conf", h: "Conf", l: 1 }, { k: "w", h: "W–L", v: (r) => r.w / Math.max(1, r.w + r.l), f: (r) => `${r.w}–${r.l}` }, { k: "pw", h: "Power", t: "Points better than an average D1 team", f: (r) => (r.pw > 0 ? "+" : "") + f1(r.pw) }, { k: "tr", h: "Roster", heat: 1 }, { k: "pr", h: "Prestige", heat: 1 }];
+    const cols = [{ k: "net", h: "NET" }, { k: "t", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid) }, { k: "conf", h: "Conf", l: 1 }, { k: "w", h: "W–L", v: (r) => r.w / Math.max(1, r.w + r.l), f: (r) => `${r.w}–${r.l}` }, { k: "pw", h: "Power", t: "Points better than an average D1 team", f: (r) => (r.pw > 0 ? "+" : "") + f1(r.pw) }, { k: "tr", h: "Roster" }, { k: "pr", h: "Prestige" }];
     return phead("Rankings", P ? `Top 25 poll for the week of ${fmtDay(Math.min(P.day, E.DAYS.last))} · NET for all 365 teams` : "The first poll comes out after week one") + `<div class="grid2 r"><div class="card"><h3>Top 25 poll</h3>${P ? `<div class="scroll"><table><thead><tr><th>#</th><th></th><th class="l">Team</th><th class="l">Conf</th><th>W–L</th><th>NET</th></tr></thead><tbody>${ap}</tbody></table></div><p class="mute small">Also receiving votes: ${P.others.map((t) => esc(T(t).region)).join(", ")}</p>` : `<p class="mute">The first poll comes out after week one.</p>`}</div>
       <div><div class="cardh" style="margin-bottom:10px"><h3>NET rankings</h3><select id="rkConf" class="btn" aria-label="Conference">${confOptions(S.rk.cid, `<option value="all">All 365 teams</option>`)}</select></div>
       ${table("net", cols, rows, { def: { k: "net", d: 1 }, rc: (r) => (r.tid === L.userTid ? "me" : "") })}
@@ -741,14 +674,10 @@
     const tc = [{ k: "t", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid) }, { k: "gp", h: "G", v: (r) => r.a.gp, f: (r) => r.a.gp }].concat([["pts", "PTS"], ["opp", "OPP"], ["mar", "MARGIN"], ["fg", "FG%"], ["tp", "3P%"], ["tpa", "3PA"], ["ft", "FT%"], ["reb", "REB"], ["ast", "AST"], ["tov", "TO"], ["stl", "STL"], ["blk", "BLK"]].map(([k, h]) => ({ k, h, v: (r) => tv(r, k), f: (r) => f1(tv(r, k)) })));
     return phead(title, `${seasonLabel(L.season)} season · ${sc === "team" ? "every player on your roster" : "click any column to sort"}`, `<span class="seg"><button class="${!tot ? "on" : ""}" data-act="smode:per">Per game</button><button class="${tot ? "on" : ""}" data-act="smode:tot">Totals</button></span>${scopeSel}`) + `
       ${ps.length ? table("stats" + (sc === "team" ? "T" : ""), cols, ps, { def: { k: "pts", d: -1 }, limit: 100, rc: (p) => (p.tid === u && sc !== "team" ? "me" : "") }) + (ps.length > 100 ? `<p class="mute small">Top 100 of ${ps.length} players for this sort.</p>` : "") : `<p class="mute">No games played yet.</p>`}
-      ${sc === "team" ? hpiCard(u) : ""}
       <h2 style="margin-top:26px">${sc === "team" ? "Your team vs. opponents" : "Team stats"}</h2>${sc === "team" ? teamVsOpp() : table("tstats", tc, trows, { def: { k: "pts", d: -1 }, limit: 120, rc: (r) => (r.tid === u ? "me" : "") })}`;
   }
 
-  function hpiCard(tid) {
-    const H = hpiRows(), rk = hpiRanks(H.rows);
-    return `<div class="card" style="margin-top:16px"><div class="cardh"><h3>HPI profile</h3><a data-go="hpi">Full HPI</a></div>${profileBars(tid, H, rk)}</div>`;
-  }
+
   function teamVsOpp() {
     const a = L.ts[L.userTid], o = L.os[L.userTid], n = a.gp || 1;
     const row = (lab, f) => `<tr><td class="l">${lab}</td><td>${f(a)}</td><td>${f(o)}</td></tr>`;
@@ -854,7 +783,7 @@
     return phead("Program records", seasons ? `Totals across the ${seasons} completed season${seasons === 1 ? "" : "s"} in this league · click a column to sort` : "Fills in as seasons are completed", opts) +
       (seasons ? table("records", cols, sorted, { def, presorted: true, rc: (r) => (r.tid === L.userTid ? "me" : "") }) : `<div class="card"><p class="mute">Finish your first season to start the record book.</p></div>`);
   }
-  function awardCell(x, extra) { if (!x) return `<td class="l mute">–</td>`; const alive = L.players.some((p) => p.pid === x.pid); return `<td class="l">${alive ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)} · ${x.pos} · ${E.YR[x.yr] || ""}</span><div class="small mute">${extra || `${x.ppg} ppg · ${x.rpg} rpg · ${x.apg} apg`}</div></td>`; }
+  function awardCell(x, extra) { if (!x) return `<td class="l mute">–</td>`; const alive = L.players.some((p) => p.pid === x.pid) || !!(L.alumni && L.alumni[x.pid]); return `<td class="l">${alive ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)} · ${x.pos} · ${E.YR[x.yr] || ""}</span><div class="small mute">${extra || `${x.ppg} ppg · ${x.rpg} rpg · ${x.apg} apg`}</div></td>`; }
   function vConfAwards() {
     const cid = S.cid ?? T(L.userTid).cid, c = L.confs[cid], A = L.awards || {};
     const seasons = Object.keys(A).map(Number).sort((x, y) => y - x);
@@ -918,7 +847,6 @@
       case "thistory": html = vProgram(L.userTid); break;
       case "progh": html = vProgram(S.tid); break;
       case "records": html = vRecords(); break;
-      case "hpi": html = vHPI(); break;
       case "summary": html = vSummary(); break;
       case "book": html = vBook(); break;
       case "rankings": html = vRankings(); break;
@@ -999,7 +927,6 @@
     else if (k === "sumseason") { S.sumSeason = +v; render(); }
     else if (k === "summine") { S.sumMine = v === "1"; render(); }
     else if (k === "booktab") { S.bookTab = v; render(); }
-    else if (k === "hpitab") { S.hpiTab = v; render(); }
     else if (k === "recmode") { S.recMode = v; render(); }
     else if (k === "recconf") { S.recMode = "schools"; S.recConf = v; render(); window.scrollTo(0, 0); }
     else if (k === "sday") { S.sday = +v; render(); }
@@ -1214,7 +1141,6 @@
     else if (id === "confSel") { S.cid = +e.target.value; render(); }
     else if (id === "histSel") { go("progh:" + e.target.value); }
     else if (id === "recConf") { S.recConf = e.target.value; render(); }
-    else if (id === "hpiConf") { S.hpiConf = e.target.value; render(); }
     else if (id === "sumSel") { S.sumSeason = +e.target.value; render(); }
     else if (id === "sdaySel") { S.sday = +e.target.value; render(); }
     else if (id === "sfilSel") { S.sfil = e.target.value; render(); }

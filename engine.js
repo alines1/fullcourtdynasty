@@ -1063,9 +1063,13 @@
   function archiveAlumni(L) {
     const A = L.alumni || (L.alumni = {});
     const honored = new Set(); for (const s in L.awards || {}) { const a = L.awards[s]; for (const k of ["poy", "foy", "mop"]) if (a[k]) honored.add(a[k].pid); for (const c in a.conf || {}) for (const k of ["poy", "foy"]) if (a.conf[c][k]) honored.add(a.conf[c][k].pid); }
+    for (const p of L.players) if (p.leave) careerRecords(L, p);
+    // record holders stay clickable too: national record book and every program's own records
+    const rbk = L.rb || {};
+    for (const grp of [rbk.game, rbk.season, rbk.career]) for (const k in grp || {}) for (const x of grp[k] || []) if (x && x.pid != null) honored.add(x.pid);
+    for (const t of L.teams) for (const k in t.best || {}) { const x = t.best[k]; if (x && x.pid != null && (k.startsWith("s_") || k.startsWith("c_"))) honored.add(x.pid); } // program season and career records
     for (const p of L.players) {
       if (!p.leave) continue;
-      careerRecords(L, p);
       if (!(p.pro || p.tid === L.userTid || honored.has(p.pid))) continue;
       A[p.pid] = { pid: p.pid, first: p.first, last: p.last, pos: p.pos, hgt: p.hgt, town: p.town, tid: p.tid, school: L.teams[p.tid].region, left: L.season, how: p.leave, cls: classLabel(p), ovr: p.ovr, pot: p.pot, stars: p.stars || null, stats: p.stats, awards: p.awards || [], pro: p.pro || null };
     }
@@ -1453,12 +1457,14 @@
     const P = (p) => { const o = Object.assign({}, p); o.r = RKEYS.map((k) => p.r[k]); if (p.stats) { o.stats = {}; for (const y in p.stats) o.stats[y] = [p.stats[y].tid].concat(STATK.map((k) => p.stats[y][k])); } return o; };
     const o = Object.assign({}, L); delete o.power; o.powerDay = -1;
     o.players = L.players.map(P); o.recruits = L.recruits.map(P);
+    if (L.alumni) { o.alumni = {}; for (const k in L.alumni) { const a = L.alumni[k], c = Object.assign({}, a); if (a.stats) { c.stats = {}; for (const y in a.stats) c.stats[y] = Array.isArray(a.stats[y]) ? a.stats[y] : [a.stats[y].tid].concat(STATK.map((s) => a.stats[y][s])); } o.alumni[k] = c; } }
     o.boxes = L.boxes; o.games = L.games;
     return o;
   }
   function unpack(o) {
     const U = (p) => { if (Array.isArray(p.r)) { const r = {}; RKEYS.forEach((k, i) => (r[k] = p.r[i])); p.r = r; } if (p.stats) for (const y in p.stats) { const a = p.stats[y]; if (Array.isArray(a)) { const s = { tid: a[0] }; STATK.forEach((k, i) => (s[k] = a[i + 1])); p.stats[y] = s; } } return p; };
     o.players.forEach(U); (o.recruits || []).forEach(U);
+    for (const k in o.alumni || {}) { const a = o.alumni[k]; if (a.stats) for (const y in a.stats) { const v = a.stats[y]; if (Array.isArray(v)) { const s = { tid: v[0] }; STATK.forEach((key, i) => (s[key] = v[i + 1])); a.stats[y] = s; } } }
     return o;
   }
 
