@@ -201,7 +201,10 @@
       power: null, powerDay: -1, poll: null, history: [], awards: {}, presFix: 1, news: [], plan: {}, autoRec: false, week: -1, ncaaRes: {},
     };
     if (!seedLeague) {
-      if (pack && validatePack(pack).ok) genWorldFromPack(L, pack); else genWorld(L);
+      if (pack === "random") genWorld(L);
+      else if (pack && validatePack(pack).ok) genWorldFromPack(L, pack);
+      else if (NM.DEFAULT) genWorldFromPack(L, NM.DEFAULT); // default: fictional schools in real college towns
+      else genWorld(L);
       placeSchools(L, true);
       for (const t of L.teams) t.pace = Math.round(clamp(gauss(0, 3.2), -8, 8) * 10) / 10;
       for (const t of L.teams) if (t.base == null) t.base = t.prestige;
@@ -1017,24 +1020,31 @@
   // ---------- life after college: departures, pro draft, alumni ----------
   // fictional pro franchises (real cities, invented names)
   const PRO_TEAMS = ["Atlanta Firebirds", "Boston Harbormen", "Brooklyn Bridges", "Charlotte Pilots", "Chicago Gale", "Cleveland Foundry", "Dallas Wranglers", "Denver Peaks", "Detroit Motormen", "Houston Launch", "Indianapolis Racers", "Kansas City Stampede", "Las Vegas Neon", "Los Angeles Surf", "Memphis Rivermen", "Miami Tides", "Milwaukee Brewcats", "Minneapolis Frost", "Nashville Sound", "New Orleans Brass", "New York Knights", "Oakland Redwoods", "Oklahoma City Twisters", "Orlando Orbit", "Philadelphia Founders", "Phoenix Flare", "Portland Rainmakers", "San Antonio Vaqueros", "Seattle Squall", "Toronto Northmen"];
+  // How pro teams see a player: mostly upside and age, then current ability, size and production.
+  // Like real drafts, young high-ceiling players go first; seniors are proven but have less room to grow.
+  const PRO_YOUTH = [0, 4, 3, 1.5, 0, -1];
+  function proScore(L, p) {
+    const s = p.stats[L.season], ppg = s && s.gp ? s.pts / s.gp : 0;
+    if (p.dn == null) p.dn = Math.round(gauss(0, 2.5) * 10) / 10; // scouts' lasting opinion of him
+    return 0.45 * p.ovr + 0.55 * p.pot + (PRO_YOUTH[p.yr] ?? -1) + ppg * 0.12 + (p.hgt - 78) * 0.35 + p.dn;
+  }
   function decideDepartures(L) {
     const u = L.userTid;
-    for (const p of L.players) {
-      delete p.leave;
-      if (p.rs) continue; // redshirting this year: eligibility saved
-      const medical = p.inj && p.inj.g === 99 && p.inj.s === L.season && (p.stats[L.season]?.gp || 0) <= 9 && !p.rsUsed;
-      if (medical) continue;
-      if (p.yr >= 4) p.leave = "grad";
-      else if (p.yr >= 2 && p.ovr >= 69 && R() < (p.ovr - 65) / 14) { p.leave = "early"; if (p.tid === u) news(L, `${p.first} ${p.last} declares for the pro draft.`, true); }
-      else if (p.yr === 1 && p.ovr >= 71 && R() < (p.ovr - 67) / 9) { p.leave = "early"; if (p.tid === u) news(L, `${p.first} ${p.last} declares for the pro draft after one season.`, true); }
+    // the draft board: every eligible player ranked the way pro teams see him
+    const elig = L.players.filter((p) => { delete p.leave; if (p.rs) return false; const medical = p.inj && p.inj.g === 99 && p.inj.s === L.season && (p.stats[L.season]?.gp || 0) <= 9 && !p.rsUsed; return !medical; });
+    const board = elig.map((p) => ({ p, v: proScore(L, p) })).sort((a, b) => b.v - a.v);
+    board.forEach((x, i) => (x.p.proj = i + 1));
+    for (const { p } of board) {
+      if (p.yr >= 4) { p.leave = "grad"; continue; }
+      const r = p.proj;
+      // projected high picks almost always go; fringe prospects usually stay; a few leave too early anyway
+      const go = r <= 5 ? 0.97 : r <= 14 ? 0.92 : r <= 30 ? 0.8 : r <= 45 ? 0.5 : r <= 60 ? 0.3 : r <= 90 ? 0.12 : r <= 150 ? 0.03 : 0;
+      if (R() < go) { p.leave = "early"; if (p.tid === u) news(L, `${p.first} ${p.last} declares for the pro draft${p.yr === 1 ? " after one season" : ""}${r <= 30 ? ` (projected first-round pick)` : ""}.`, true); }
     }
+    for (const p of L.players) delete p.proj;
   }
   function runDraft(L) {
-    const pool = L.players.filter((p) => p.leave).map((p) => {
-      const s = p.stats[L.season], ppg = s && s.gp ? s.pts / s.gp : 0;
-      const youth = [0, 6, 4, 2, 0][p.yr] || 0;
-      return { p, v: p.ovr + 0.55 * (p.pot - p.ovr) + youth + ppg * 0.25 + (p.hgt - 78) * 0.4 + gauss(0, 2.5) };
-    }).sort((a, b) => b.v - a.v);
+    const pool = L.players.filter((p) => p.leave).map((p) => ({ p, v: proScore(L, p) + gauss(0, 1.5) })).sort((a, b) => b.v - a.v);
     const order = shuffle(PRO_TEAMS.slice());
     const picks = [];
     for (let i = 0; i < 60 && i < pool.length; i++) {

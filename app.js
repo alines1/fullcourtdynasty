@@ -534,7 +534,7 @@
         <tr><td class="l mute">Hometowns</td><td class="l"><a href="https://simplemaps.com/data/us-cities">SimpleMaps US Cities Database</a> (Basic), CC BY 4.0</td></tr>
         <tr><td class="l mute">Headline type</td><td class="l">Anton by Vernon Adams, SIL Open Font License 1.1 (<a href="fonts/OFL-Anton.txt">license</a>)</td></tr>
         <tr><td class="l mute">Text type</td><td class="l">Source Sans 3 by Paul D. Hunt for Adobe, SIL Open Font License 1.1 (<a href="fonts/OFL-SourceSans3.txt">license</a>)</td></tr></tbody></table></div>
-      <div class="card" style="margin-top:22px"><h3>Disclaimer</h3><p class="small">All schools, players, conferences and pro teams in the default world are fictional. Full Court Dynasty is not affiliated with, endorsed by, or sponsored by the NCAA, any college or university, conference, or professional league. Team names you import yourself stay in your own save.</p></div></div></div>`;
+      <div class="card" style="margin-top:22px"><h3>Disclaimer</h3><p class="small">All schools, players, mascots, conferences and pro teams are fictional. The default world places its schools in real college towns, but no school, mascot or conference is real. Full Court Dynasty is not affiliated with, endorsed by, or sponsored by the NCAA, any college or university, conference, or professional league. Team names you import yourself stay in your own save.</p></div></div></div>`;
   }
 
   // ---------- Hardwood Power Index ----------
@@ -885,12 +885,12 @@
     const W = WORLD; const cid = S.ngConf;
     const c = W.confs[cid];
     const tierName = ["", "Power conference", "High major", "Mid major", "Low major"][c.tier];
-    const outlook = (p) => (p >= 85 ? "Blue blood. Title or bust." : p >= 70 ? "Contender. tournament bid expected." : p >= 55 ? "Bubble team. Push for a bid." : p >= 40 ? "Middle of the pack." : p >= 25 ? "Rebuild." : "Long rebuild.");
+    const outlook = (p) => (p >= 85 ? "Blue blood. Title or bust." : p >= 70 ? "Contender. Tournament bid expected." : p >= 55 ? "Bubble team. Push for a bid." : p >= 40 ? "Middle of the pack." : p >= 25 ? "Rebuild." : "Long rebuild.");
     const rows = c.tids.slice().sort((a, b) => W.teams[b].prestige - W.teams[a].prestige).map((tid) => { const t = W.teams[tid]; return `<tr><td class="l"><span class="swatch" style="background:${col(t.c1)}"></span><b>${esc(t.region)}</b> <span class="mute">${esc(t.name)}</span></td><td>${stars(Math.max(1, Math.min(5, Math.round(t.prestige / 20))))}</td><td>${t.prestige}</td><td class="l mute">${outlook(t.prestige)}</td><td><button class="btn sm" data-act="take:${tid}">Take job</button></td></tr>`; }).join("");
-    return phead("Take a job", `${S.pack ? `${W.teams.length} schools in ${W.confs.length} conferences, from your names file.` : `A new world of ${W.teams.length} fictional schools in ${W.confs.length} conferences.`} Higher prestige means a better roster now and more recruiting points; lower prestige is a rebuild.`) + `
+    return phead("Take a job", `${S.pack === "random" ? `A made-up world: ${W.teams.length} fictional schools in invented towns.` : S.pack ? `${W.teams.length} schools in ${W.confs.length} conferences, from your names file.` : `${W.teams.length} fictional schools in real college towns, in ${W.confs.length} conferences.`} Higher prestige means a better roster now and more recruiting points; lower prestige is a rebuild.`) + `
       <div class="tools"><label for="coachName">Your name</label><input type="text" id="coachName" value="${esc(S.coachName)}" placeholder="Coach name" maxlength="30"></div>
       <div class="tools"><select id="ngConf" class="btn" aria-label="Conference">${W.confs.map((x) => `<option value="${x.cid}" ${x.cid === cid ? "selected" : ""}>${esc(x.name)} (${x.tids.length})</option>`).join("")}</select><span class="mute small">${tierName}</span>
-        <button class="btn sm" data-act="randjob:1">Random power job</button><button class="btn sm" data-act="randjob:3">Random mid-major</button><button class="btn sm" data-act="randjob:4">Random rebuild</button><button class="btn sm" data-act="reroll">New world</button><button class="btn sm" data-act="namesimp">Import team names</button>${S.pack ? `<button class="btn sm" data-act="namesclear">Use generated names</button>` : ""}</div>${S.pack ? `<p class="small mute">Built from your imported names file.</p>` : ""}
+        <button class="btn sm" data-act="randjob:1">Random power job</button><button class="btn sm" data-act="randjob:3">Random mid-major</button><button class="btn sm" data-act="randjob:4">Random rebuild</button><button class="btn sm" data-act="worldkind">${S.pack === "random" ? "Use real college towns" : "Use made-up towns"}</button><button class="btn sm" data-act="reroll">New world</button><button class="btn sm" data-act="namesimp">Import team names</button>${S.pack ? `<button class="btn sm" data-act="namesclear">Use generated names</button>` : ""}</div>${S.pack ? `<p class="small mute">Built from your imported names file.</p>` : ""}
       <div class="scroll"><table><thead><tr><th class="l">School</th><th>Prestige</th><th></th><th class="l">Outlook</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
@@ -1016,7 +1016,7 @@
       if (pk.ok && !E.sameStructure(L, txt)) { idbSet("names", txt); S.pack = txt; err([`This file has ${pk.count} schools in ${pk.confs} conferences that don't line up with your current league, so it can't rename it in place. It's saved: start a new league (Save → Start a new league) and it will be built from this file.`]); render(); return; }
       err(r.errors);
     }
-    else if (k === "namesclear") { idbSet("names", ""); S.pack = ""; if (!L) WORLD = E.newWorld(); render(); toast("Back to generated names for new leagues"); }
+    else if (k === "namesclear") { idbSet("names", ""); S.pack = ""; if (!L) WORLD = E.newWorld(); render(); toast("Back to the default world for new leagues"); }
     else if (k === "smode") { S.st.mode = v; render(); }
     else if (k === "br") { S.br = v; render(); }
     else if (k === "up" || k === "down") moveDepth(+v, k === "up" ? -1 : 1);
@@ -1032,6 +1032,7 @@
     else if (k === "unrec") { delete L.plan[+v]; render(); persist(); }
     else if (k === "take") { const name = ($("coachName")?.value || "").trim() || "Coach"; L = E.claimSchool(WORLD, +v, name); WORLD = null; S.view = "home"; S.cid = null; render(); persist(); toast(`Welcome to ${T(+v).region}, Coach ${name}`); if (!L.tourDone) tour(0); }
     else if (k === "randjob") { const tier = +v; const opts = WORLD.teams.filter((t) => WORLD.confs[t.cid].tier === tier || (tier === 3 && WORLD.confs[t.cid].tier === 2)); const t = opts[Math.floor(Math.random() * opts.length)]; S.ngConf = t.cid; S.coachName = $("coachName")?.value || S.coachName; render(); const b = document.querySelector(`[data-act="take:${t.tid}"]`); if (b) { b.closest("tr").classList.add("me"); b.focus(); } }
+    else if (k === "worldkind") { S.pack = S.pack === "random" ? "" : "random"; S.ngConf = 0; WORLD = E.newWorld(S.pack || undefined); render(); }
     else if (k === "reroll") { S.coachName = $("coachName")?.value || S.coachName; WORLD = E.newWorld(S.pack || undefined); render(); }
     else if (k === "newleague") modal(`<h2>Start a new league?</h2><p>Your current save will be replaced. Export it first if you want to keep it.</p><div class="tools"><button class="btn play" data-act="confirmnew">Start over</button><button class="btn" data-act="close">Cancel</button></div>`);
     else if (k === "confirmnew") { closeModal(); S.coachName = L.coach.name; L = null; WORLD = E.newWorld(S.pack || undefined); render(); }
