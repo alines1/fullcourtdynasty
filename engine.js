@@ -1068,9 +1068,16 @@
     const rbk = L.rb || {};
     for (const grp of [rbk.game, rbk.season, rbk.career]) for (const k in grp || {}) for (const x of grp[k] || []) if (x && x.pid != null) honored.add(x.pid);
     for (const t of L.teams) for (const k in t.best || {}) { const x = t.best[k]; if (x && x.pid != null && (k.startsWith("s_") || k.startsWith("c_"))) honored.add(x.pid); } // program season and career records
+    if (!L.past) { L.past = {}; L.pastSince = L.history.length ? L.season : 0; } // seasons before pastSince may miss role players who left earlier
+    const past = L.past;
     for (const p of L.players) {
       if (!p.leave) continue;
-      if (!(p.pro || p.tid === L.userTid || honored.has(p.pid))) continue;
+      if (!(p.pro || p.tid === L.userTid || honored.has(p.pid))) {
+        // everyone else keeps a slim line per season so past rosters stay complete: [team, games, minutes, points, rebounds, assists]
+        const s = {}; for (const y in p.stats) { const x = p.stats[y]; if (x) s[y] = [x.tid, x.gp, x.min, x.pts, x.orb + x.drb, x.ast]; }
+        past[p.pid] = [p.first + " " + p.last, p.pos, s, p.yr, L.season]; // class and season when he left, to work out his class in earlier years
+        continue;
+      }
       A[p.pid] = { pid: p.pid, first: p.first, last: p.last, pos: p.pos, hgt: p.hgt, town: p.town, tid: p.tid, school: L.teams[p.tid].region, left: L.season, how: p.leave, cls: classLabel(p), ovr: p.ovr, pot: p.pot, stars: p.stars || null, stats: p.stats, awards: p.awards || [], pro: p.pro || null };
     }
   }

@@ -69,6 +69,7 @@
     if (S.view === "box") return ["Box score", (() => { const b = L.boxes[S.gid]; return b ? `${T(b.teams[1].tid).region} at ${T(b.teams[0].tid).region}` : ""; })()];
     if (S.view === "league") return ["Settings", "Save & league"];
     if (S.view === "about") return ["Settings", "About & help"];
+    if (S.view === "teamyr") return [seasonLabel(S.ry) + " roster", full(T(S.tid))];
     return ["", ""];
   }
   function phaseLabel() {
@@ -229,7 +230,7 @@
         .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s && s[a] ? s[m] / s[a] : -1; }, f: (p) => { const s = curStats(p); return s ? pct(s[m], s[a]) : "–"; } })));
     const inc = L.recruits.filter((r) => r.commit === tid).sort((a, b) => a.rank - b.rank);
     return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${t.city ? esc(t.city) + " · " : ""}${esc(C(tid).name)} · ${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
-      <div class="tools"><button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
+      <div class="tools">${t.hist.length ? seasonOptions(tid, L.season) : ""}<button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
       ${table(id, base.concat(extra), ps, { rc: (p) => (p.depth < 5 ? "start" : "") + (p.depth === 4 ? " split" : "") })}
       ${inc.length ? `<h3 style="margin-top:18px">Committed for next season</h3><p>${inc.map((r) => `${stars(r.stars)} ${esc(r.first + " " + r.last)} <span class="mute">${r.pos} · No. ${r.rank}</span>`).join(" &nbsp; ")}</p>` : ""}
       <p class="mute small">Ovr is a player's current overall rating and Pot his rough ceiling; open a player for his full ratings. Stats are per game this season. Injured and redshirted players are skipped in the rotation automatically. Freshmen can be redshirted before they've played more than 4 games; a player who misses the season injured gets a medical redshirt automatically.</p>`;
@@ -241,7 +242,7 @@
     const t = T(p.tid);
     const bars = E.RKEYS.map((k) => `<div class="row"><span>${E.RNAMES[k]}</span><span class="bar"><i style="width:${p.r[k]}%"></i></span><b style="text-align:right">${p.r[k]}</b></div>`).join("");
     const seasons = Object.keys(p.stats).map(Number).sort();
-    const srow = (y) => { const s = p.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l">${esc(L.teams[s.tid]?.abbrev || "")}</td><td>${s.gp}</td><td>${s.gs}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / s.gp)}</td><td>${f1(pg(s, "ast"))}</td><td>${f1(pg(s, "stl"))}</td><td>${f1(pg(s, "blk"))}</td><td>${f1(pg(s, "tov"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td><td>${pct(s.ftm, s.fta)}</td></tr>`; };
+    const srow = (y) => { const s = p.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l"><a data-go="teamyr:${s.tid}:${y}" title="${esc(T(s.tid).region)} roster, ${seasonLabel(y)}">${esc(L.teams[s.tid]?.abbrev || "")}</a></td><td>${s.gp}</td><td>${s.gs}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / s.gp)}</td><td>${f1(pg(s, "ast"))}</td><td>${f1(pg(s, "stl"))}</td><td>${f1(pg(s, "blk"))}</td><td>${f1(pg(s, "tov"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td><td>${pct(s.ftm, s.fta)}</td></tr>`; };
     const log = [];
     for (const gid in L.boxes) { const b = L.boxes[gid]; for (const bt of b.teams) { const r = bt.rows.find((x) => x.pid === pid); if (r) { const opp = b.teams.find((x) => x !== bt); log.push({ b, r, opp, w: bt.score > opp.score, sc: `${bt.score}–${opp.score}` }); } } }
     log.sort((a, b) => b.b.day - a.b.day);
@@ -268,7 +269,7 @@
     if (!a) return phead("Former player", "This player has left college. Records are kept for drafted players, award winners and players from your program.");
     const seasons = Object.keys(a.stats).map(Number).sort();
     const c = E.careerTotals(a), gp = c.gp || 1;
-    const srow = (y) => { const s = a.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l">${esc(L.teams[s.tid]?.abbrev || "")}</td><td>${s.gp}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / (s.gp || 1))}</td><td>${f1(pg(s, "ast"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td></tr>`; };
+    const srow = (y) => { const s = a.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l"><a data-go="teamyr:${s.tid}:${y}" title="${esc(T(s.tid).region)} roster, ${seasonLabel(y)}">${esc(L.teams[s.tid]?.abbrev || "")}</a></td><td>${s.gp}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / (s.gp || 1))}</td><td>${f1(pg(s, "ast"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td></tr>`; };
     const pro = a.pro ? `Drafted No. ${a.pro.pick} overall (round ${a.pro.round}) by the ${esc(a.pro.team)} in ${a.pro.season}` : a.how === "early" ? "Left early for the pros; went undrafted" : "Graduated; went undrafted";
     return teamHead(a.tid, esc(a.first + " " + a.last), `${a.pos} · ${esc(a.school)} · left ${seasonLabel(a.left)} (${a.how === "early" ? "early entry" : "graduated"})`, `<button class="btn sm" data-go="progh:${a.tid}">${esc(T(a.tid).abbrev)} history</button>`) + `
       ${awardPills(a.awards)}
@@ -285,6 +286,38 @@
     const items = [...by.entries()].sort((x, y) => AW_ORDER(x[0]) - AW_ORDER(y[0]) || y[1].length - x[1].length || x[1][0] - y[1][0]);
     return `<div class="awards">${items.map(([n, ss]) => `<span class="pill aw${n === "National Player of the Year" ? " gold" : ""}" title="${esc(ss.map(seasonLabel).join(", "))}">${ss.length > 1 ? `${ss.length}x ${esc(n)}` : `${seasonLabel(ss[0])} ${esc(n)}`}</span>`).join("")}</div>`;
   }
+  // ---------- a team's roster in a past season ----------
+  function seasonOptions(tid, sel) {
+    const ys = T(tid).hist.map((h) => h.season); if (!ys.includes(L.season)) ys.push(L.season);
+    return `<select id="rySel" class="btn" data-tid="${tid}" aria-label="Season">${ys.slice().reverse().map((y) => `<option value="${y}" ${y === sel ? "selected" : ""}>${seasonLabel(y)}${y === L.season ? " (current)" : ""}</option>`).join("")}</select>`;
+  }
+  function vTeamSeason(tid, y) {
+    const t = T(tid), h = t.hist.find((x) => x.season === y), rows = [], seen = new Set();
+    // class that season, worked back from a known class in a known season (falls back to seasons on file)
+    const YRS = ["FR", "SO", "JR", "SR", "GR"];
+    const cls = (yrKnown, atSeason, ys) => { if (yrKnown) { const v = yrKnown - (atSeason - y); return YRS[Math.max(0, Math.min(4, v - 1))]; } return YRS[Math.min(4, ys.indexOf(y))] || "–"; };
+    const add = (pid, name, pos, stats, link, yrKnown, atSeason) => { const s = stats[y]; if (!s || s.tid !== tid || seen.has(pid)) return; seen.add(pid); const ys = Object.keys(stats).map(Number).sort(); rows.push({ pid, name, pos, cls: cls(yrKnown, atSeason, ys), gp: s.gp, min: s.min, pts: s.pts, reb: (s.orb || 0) + (s.drb || 0), ast: s.ast, fgm: s.fgm, fga: s.fga, tpm: s.tpm, tpa: s.tpa, link }); };
+    for (const p of L.players) add(p.pid, p.first + " " + p.last, p.pos, p.stats, true, p.yr, L.season);
+    for (const k in L.alumni || {}) { const a = L.alumni[k], c = YRS.indexOf(String(a.cls || "").replace("RS ", "")) + 1; add(a.pid, a.first + " " + a.last, a.pos, a.stats, true, c || null, a.left); }
+    for (const k in L.past || {}) {
+      const [name, pos, st, yrLeft, left] = L.past[k], s = st[y]; if (!s || s[0] !== tid || seen.has(+k)) continue;
+      seen.add(+k); const ys = Object.keys(st).map(Number).sort();
+      rows.push({ pid: +k, name, pos, cls: cls(yrLeft, left, ys), gp: s[1], min: s[2], pts: s[3], reb: s[4], ast: s[5], link: false });
+    }
+    const per = (r, k) => (r.gp ? r[k] / r.gp : 0);
+    const cols = [
+      { k: "name", h: "Player", l: 1, v: (r) => r.name, f: (r) => (r.link ? playerLink(r) : esc(r.name)) },
+      { k: "pos", h: "Pos", v: (r) => E.POS.indexOf(r.pos), f: (r) => r.pos }, { k: "cls", h: "Yr", v: (r) => ["FR", "SO", "JR", "SR", "GR"].indexOf(r.cls) },
+      { k: "gp", h: "GP" }, { k: "mpg", h: "MPG", v: (r) => per(r, "min"), f: (r) => f1(per(r, "min")) },
+      { k: "ppg", h: "PTS", v: (r) => per(r, "pts"), f: (r) => f1(per(r, "pts")) }, { k: "rpg", h: "REB", v: (r) => per(r, "reb"), f: (r) => f1(per(r, "reb")) }, { k: "apg", h: "AST", v: (r) => per(r, "ast"), f: (r) => f1(per(r, "ast")) },
+      { k: "fg", h: "FG%", v: (r) => (r.fga ? r.fgm / r.fga : -1), f: (r) => (r.fga ? pct(r.fgm, r.fga) : "–") }, { k: "tp", h: "3P%", v: (r) => (r.tpa ? r.tpm / r.tpa : -1), f: (r) => (r.tpa ? pct(r.tpm, r.tpa) : "–") },
+    ];
+    const sub = h ? `${h.w}–${h.l} · ${h.cw}–${h.cl} ${esc(C(tid).abbrev)} (${ordinal(h.seed)})${h.ct ? " · conference tournament champions" : ""} · ${h.ncaa >= 0 ? `${h.nseed} seed, ${ncaaResult(h.ncaa)}` : "no National Tournament bid"}` : "";
+    return teamHead(tid, `${esc(full(t))}`, `${seasonLabel(y)} roster${sub ? " · " + sub : ""}`, `${seasonOptions(tid, y)}<button class="btn sm" data-go="team:${tid}">Current roster</button>`) + `
+      ${rows.length ? table("tyr", cols, rows, { def: { k: "mpg", d: -1 } }) : `<p class="mute">No roster on file for this season.</p>`}
+      <p class="mute small">Stats are per game for ${seasonLabel(y)}. Class is the player's year in the program that season. ${L.pastSince && y < L.pastSince ? "Some role players who left before rosters were archived may be missing." : ""}</p>`;
+  }
+
   // ---------- schedule / box ----------
   function vSchedule(tid) {
     tid = tid ?? L.userTid;
@@ -910,6 +943,7 @@
       case "recruiting": html = vRecruiting(); break;
       case "portal": html = vPortal(); break;
       case "about": html = vAbout(); break;
+      case "teamyr": html = vTeamSeason(S.tid, S.ry); break;
       case "tourney": html = vTourney(); break;
       case "league": html = vLeague(); break;
       default: html = vHome();
@@ -924,10 +958,11 @@
   }
   const histStack = [];
   function go(target, noPush) {
-    const [v, id] = target.split(":");
-    if (!noPush) histStack.push({ view: S.view, tid: S.tid, pid: S.pid, gid: S.gid });
+    const [v, id, extra] = target.split(":");
+    if (!noPush) histStack.push({ view: S.view, tid: S.tid, pid: S.pid, gid: S.gid, ry: S.ry });
     if (v === "team") { const tid = +id; if (tid === L.userTid) S.view = "roster"; else { S.view = "team"; S.tid = tid; } }
     else if (v === "player") { S.view = "player"; S.pid = +id; }
+    else if (v === "teamyr") { const tid = +id, y = +extra; if (y === L.season) { if (tid === L.userTid) S.view = "roster"; else { S.view = "team"; S.tid = tid; } } else { S.view = "teamyr"; S.tid = tid; S.ry = y; } }
     else if (v === "box") { S.view = "box"; S.gid = +id; }
     else if (v === "schedule") { S.view = "schedule"; S.tid = id != null ? +id : null; }
     else if (v === "progh") { const tid = +id; if (tid === L.userTid) { S.view = "thistory"; } else { S.view = "progh"; S.tid = tid; } }
@@ -1188,6 +1223,7 @@
   document.addEventListener("input", (e) => { if (e.target.id === "rq") { S.rf.q = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(() => { render(); const el = $("rq"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250); } });
   document.addEventListener("change", (e) => {
     const id = e.target.id;
+    if (id === "rySel") { go(`teamyr:${e.target.dataset.tid}:${e.target.value}`); return; }
     if (e.target.dataset && e.target.dataset.bk) {
       const k = e.target.dataset.bk, B = S.bk; B[k] = e.target.value; B.n = 100;
       if (k === "cid") B.tid = "all";
