@@ -71,6 +71,7 @@
     if (S.view === "box") return ["Box score", (() => { const b = L.boxes[S.gid]; return b ? `${T(b.teams[1].tid).region} at ${T(b.teams[0].tid).region}` : ""; })()];
     if (S.view === "league") return ["Settings", "Save & league"];
     if (S.view === "about") return ["Settings", "About & help"];
+    if (S.view === "settings") return ["Settings", "Game settings"];
     if (S.view === "teamyr") return [seasonLabel(S.ry) + " roster", full(T(S.tid))];
     return ["", ""];
   }
@@ -117,7 +118,7 @@
     $("side").innerHTML = brand +
       `<div class="me-card" data-go="home" tabindex="0" role="button">${logo(t, 38)}<div style="min-width:0"><b>${rkTag(t.tid)}${esc(full(t))}</b><span>${r.w}–${r.l} · ${r.cw}–${r.cl} ${esc(C(t.tid).abbrev)} · NET ${NET[t.tid]}</span></div></div>` +
       NAV.map(([g, items]) => `<div class="navg"><h4>${g === "Conference" ? esc(C(t.tid).abbrev) + " · Conference" : g}</h4>${items.map(([k, n, ic]) => `<button class="nav${onView(k) ? " on" : ""}" data-go="${k}">${icon(ic)}${n}${k === "recruiting" && Object.keys(L.plan).length ? `<span class="ct">${L.recruits.filter((x) => x.commit === L.userTid).length}/${E.openSlots(L, L.userTid)}</span>` : ""}</button>`).join("")}</div>`).join("") +
-      `<div class="side-foot"><button class="nav${S.view === "league" ? " on" : ""}" data-go="league">${icon("save")}Save &amp; league</button><button class="nav${S.view === "about" ? " on" : ""}" data-go="about">About &amp; help</button><div class="status" id="status">${esc(saveLine())}</div></div>`;
+      `<div class="side-foot"><button class="nav${S.view === "league" ? " on" : ""}" data-go="league">${icon("save")}Save &amp; league</button><button class="nav${S.view === "settings" ? " on" : ""}" data-go="settings">Settings</button><button class="nav${S.view === "about" ? " on" : ""}" data-go="about">About &amp; help</button><div class="status" id="status">${esc(saveLine())}</div></div>`;
     const sEl = $("strip"); sEl.innerHTML = resultStrip();
     const focus = sEl.querySelector(".gb.next") || [...sEl.querySelectorAll(".gb")].pop();
     if (focus && sEl.scrollWidth > sEl.clientWidth) sEl.scrollLeft = Math.max(0, focus.offsetLeft - sEl.clientWidth * 0.6);
@@ -387,7 +388,7 @@
     const ys = t.hist.map((x) => x.season), i = ys.indexOf(y), prev = i > 0 ? ys[i - 1] : null, next = i >= 0 && i < ys.length - 1 ? ys[i + 1] : y < L.season ? L.season : null;
     const nav = `${prev ? `<button class="btn sm" data-go="teamyr:${tid}:${prev}">◀ ${seasonLabel(prev)}</button>` : ""}${seasonOptions(tid, y)}${next ? `<button class="btn sm" data-go="teamyr:${tid}:${next}">${seasonLabel(next)} ▶</button>` : ""}<button class="btn sm" data-go="team:${tid}">Current roster</button>`;
     const post = !h ? "–" : h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa)}` : "No bid";
-    const banner = h ? `<div class="kpis">${kpi("Record", `${h.w}–${h.l}`, `${h.w + h.l ? Math.round((100 * h.w) / (h.w + h.l)) : 0}% wins`)}${kpi("Conference", `${h.cw}–${h.cl}`, `${ordinal(h.seed)} in the ${esc(C(tid).abbrev)}`)}${kpi("Conf. tournament", h.ct ? "Champions" : "–", h.ct ? "automatic bid" : "")}${kpi("National Tournament", wonAll ? "Champions" : h.ncaa >= 0 ? `${h.nseed} seed` : "No bid", wonAll ? `${h.nseed} seed` : h.ncaa >= 0 ? ncaaResult(h.ncaa) : "")}${kpi("Prestige", h.prestige ?? "–", "after the season")}</div>` : `<p class="mute">Season in progress or not on file.</p>`;
+    const banner = h ? `<div class="kpis">${kpi("Record", `${h.w}–${h.l}`, `${h.w + h.l ? Math.round((100 * h.w) / (h.w + h.l)) : 0}% wins`)}${kpi("Conference", `${h.cw}–${h.cl}`, `${ordinal(h.seed)} in the ${esc(L.confs[h.cid ?? t.cid].abbrev)}`)}${kpi("Conf. tournament", h.ct ? "Champions" : "–", h.ct ? "automatic bid" : "")}${kpi("National Tournament", wonAll ? "Champions" : h.ncaa >= 0 ? `${h.nseed} seed` : "No bid", wonAll ? `${h.nseed} seed` : h.ncaa >= 0 ? ncaaResult(h.ncaa) : "")}${kpi("Prestige", h.prestige ?? "–", "after the season")}</div>` : `<p class="mute">Season in progress or not on file.</p>`;
     return teamHead(tid, `${seasonLabel(y)} ${esc(full(t))}`, `${confLink(tid)} · ${wonAll ? "<b>National champions</b> · " : ff ? "Final Weekend · " : ""}season archive`, nav) + banner + `
       ${rows.length ? table("tyr", cols, rows, { def: { k: "mpg", d: -1 } }) : `<p class="mute">No roster on file for this season.</p>`}
       <p class="mute small">Stats are per game for ${seasonLabel(y)}. Class is the player's year in the program that season. ${L.pastSince && y < L.pastSince ? "Some role players who left before rosters were archived may be missing." : ""}</p>`;
@@ -549,11 +550,33 @@
         <tr><td class="l mute">Postseason</td><td class="l">${uh.ct ? "Won the conference tournament · " : ""}${uh.ncaa >= 0 ? `${uh.nseed} seed, ${ncaaResult(uh.ncaa)}` : "No tournament bid"}</td></tr>
         <tr><td class="l mute">Drafted</td><td class="l">${mineD.length ? mineD.map((d) => `${playerLink({ pid: d.pid, name: d.name })} (No. ${d.pick})`).join(", ") : "None"}</td></tr>
         <tr><td class="l mute">Leaving</td><td class="l">${gone.length ? gone.map((x) => `${playerLink({ pid: x.pid, name: x.first + " " + x.last })} <span class="mute">(${x.how === "early" ? "early entry" : "graduated"})</span>`).join(", ") : L.phase === "offseason" && s === L.season ? E.roster(L, u).filter((p) => p.leave).map((p) => `${plink(p)} <span class="mute">(${p.leave === "early" ? "early entry" : "graduating"})</span>`).join(", ") || "Nobody" : "Nobody"}</td></tr></tbody></table>
-        ${L.phase === "offseason" && s === L.season ? `${portalNote()}<div class="tools" style="margin:14px 0 0"><button class="btn" data-go="portal">Transfer portal</button><button class="btn play" data-act="newseason">Start ${seasonLabel(L.season + 1)} season</button><button class="btn" data-go="tourney">Final bracket</button></div>` : ""}</div></div></div>
+        ${L.phase === "offseason" && s === L.season && L.realign && !L.realign.decided ? `<p class="small" style="margin:12px 0 0"><b>Conference realignment proposed.</b> <button class="btn sm" data-act="realignshow">Review moves</button></p>` : ""}${L.phase === "offseason" && s === L.season ? `${portalNote()}<div class="tools" style="margin:14px 0 0"><button class="btn" data-go="portal">Transfer portal</button><button class="btn play" data-act="newseason">Start ${seasonLabel(L.season + 1)} season</button><button class="btn" data-go="tourney">Final bracket</button></div>` : ""}</div></div></div>
       <div class="card" style="margin-top:16px"><div class="cardh"><h3>Pro draft · ${s}</h3><span class="seg"><button class="${!S.sumMine ? "on" : ""}" data-act="summine:0">All 60 picks</button><button class="${S.sumMine ? "on" : ""}" data-act="summine:1">Your players</button></span></div>
         ${dShow.length ? table("draft" + s, dcols, dShow, { def: { k: "pick", d: 1 }, rc: (d) => (d.tid === u ? "me" : "") + (d.pick === 30 ? " split" : "") }) : `<p class="mute">${S.sumMine ? "None of your players were drafted." : "No draft this season."}</p>`}
         <p class="mute small">Two rounds of 30 picks by a fictional pro league. Seniors and early entrants are in the pool; teams draft on current ability, upside, age and production.</p></div>
       <div class="card" style="margin-top:16px"><h3>Records set this season</h3>${recs.length ? `<ul class="reclist">${recs.slice(0, 14).join("")}</ul>${recs.length > 14 ? `<p class="mute small">+ ${recs.length - 14} more in the record book</p>` : ""}` : `<p class="mute">No National records fell this season.</p>`}<p class="small" style="margin:8px 0 0"><a data-go="book">Open the record book</a></p></div>`;
+  }
+
+  // ---------- settings ----------
+  function vSettings() {
+    const st = L.settings || {}, on = !!st.realign, pct = st.realignPct ?? 25, log = (L.realignLog || []).slice().reverse();
+    const pend = L.realign && !L.realign.decided;
+    return phead("Settings", "Options for this league") + `<div class="dash">
+      <div class="s6"><div class="card"><h3>Conference realignment</h3>
+        <label class="check"><input type="checkbox" id="setRealign" ${on ? "checked" : ""}> Allow conference realignment</label>
+        <div class="tools" style="margin-top:8px"><label for="setRealignPct" class="small">Chance of proposals each offseason</label><select id="setRealignPct" class="btn" ${on ? "" : "disabled"}>${[10, 25, 50, 100].map((v) => `<option value="${v}" ${v === pct ? "selected" : ""}>${v}%</option>`).join("")}</select></div>
+        <p class="small">When it's on, the end of a season can bring a few proposed moves, based on results and geography:</p>
+        <ul class="reclist small"><li>A program that wins its league again and again and has outgrown it looks to move up to a stronger conference nearby.</li><li>A program stuck near the bottom of a league far above its level drops to a closer fit.</li></ul>
+        <p class="small mute">You approve or reject each move. Approved moves take effect when you start the next season. Conferences always keep between 8 and 18 teams.</p>
+        ${pend ? `<button class="btn play" data-act="realignshow">Review proposed moves</button>` : ""}</div></div>
+      <div class="s6"><div class="card"><h3>Realignment history</h3>${log.length ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">School</th><th class="l">From</th><th class="l">To</th></tr></thead><tbody>${log.map((x) => `<tr class="${x.tid === L.userTid ? "me" : ""}"><td class="l">${seasonLabel(x.season)}</td><td class="l">${tlink(x.tid, { rank: false })}</td><td class="l">${esc(L.confs[x.from].name)}</td><td class="l">${esc(L.confs[x.to].name)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="mute">No moves yet.</p>`}</div></div></div>`;
+  }
+  function realignModal() {
+    const P = L.realign; if (!P || P.decided) return;
+    modal(`<h2>Conference realignment</h2><p class="mute">These moves are proposed for next season. Uncheck any you want to block.</p>
+      <table class="tape"><tbody>${P.items.map((x, i) => `<tr><td style="width:28px"><input type="checkbox" class="rlck" data-i="${i}" checked aria-label="Approve this move"></td><td class="l"><b>${esc(T(x.tid).region)}</b>${x.tid === L.userTid ? " <span class=\"pill\">your program</span>" : ""}: ${esc(L.confs[x.from].abbrev)} → <b>${esc(L.confs[x.to].name)}</b><div class="small mute">${esc(T(x.tid).region)} ${esc(x.why)}.</div></td></tr>`).join("")}</tbody></table>
+      <div class="tools" style="margin-top:14px"><button class="btn play" data-act="realignok">Approve selected</button><button class="btn" data-act="realignno">Reject all</button></div>
+      <p class="small mute">You can turn realignment off any time in Settings.</p>`);
   }
 
   // ---------- recruiting class rankings ----------
@@ -1067,6 +1090,7 @@
       case "recruiting": html = vRecruiting(); break;
       case "portal": html = vPortal(); break;
       case "about": html = vAbout(); break;
+      case "settings": html = vSettings(); break;
       case "teamyr": html = vTeamSeason(S.tid, S.ry); break;
       case "tourney": html = vTourney(); break;
       case "league": html = vLeague(); break;
@@ -1132,6 +1156,8 @@
     else if (k === "newseason") { E.startNextSeason(L); S.view = "home"; projCache = null; render(); persist(); showRecap(); }
     else if (k === "rmode") { S.rmode = v; render(); }
     else if (k === "go") { go(v); }
+    else if (k === "realignshow") realignModal();
+    else if (k === "realignok" || k === "realignno") { const oks = [...document.querySelectorAll(".rlck")].map((c) => k === "realignok" && c.checked); E.decideRealignment(L, oks); closeModal(); render(); persist(); const n = oks.filter(Boolean).length; toast(n ? `${n} move${n > 1 ? "s" : ""} approved for next season` : "Realignment rejected"); }
     else if (k === "sumgo") { S.sumSeason = +v; go("summary"); }
     else if (k === "cstand") { S.cid = +v; go("standings"); }
     else if (k === "ctgo") { S.cid = +v; go("ctour"); }
@@ -1251,6 +1277,7 @@
     } else if (ph === "offseason") {
       const h = L.history[L.history.length - 1]; S.sumSeason = null; go("summary");
       toast(`${T(h.champ).region} are national champions`);
+      if (L.realign && !L.realign.decided) setTimeout(realignModal, 400);
     }
   }
   function showEventPopup(ph) {
@@ -1313,6 +1340,7 @@
       <h3 style="margin-top:12px">Freshman class</h3><div class="scroll"><table><tbody>${fr.map((p) => `<tr><td class="l">${pn(p)}</td><td>${p.stars ? stars(p.stars) : ""}</td><td>${p.pos}</td><td>${hgt(p.hgt)}</td><td>Ovr ${p.ovr}</td><td>Pot ${p.pot}</td></tr>`).join("") || `<tr><td class="l mute">No signees.</td></tr>`}</tbody></table></div>
       ${(r.redshirts || []).length ? `<p class="small">Redshirt year used: ${r.redshirts.map((x) => esc(x.name) + (x.medical ? " (medical)" : "")).join(", ")}. They keep their class.</p>` : ""}
       ${(r.transfers || []).length ? `<p class="small">Transfers in to replace early departures: ${r.transfers.map((id) => { const p = L.players.find((q) => q.pid === id); return p ? esc(p.first + " " + p.last) + ` <span class="mute">${p.pos}, ovr ${p.ovr}</span>` : ""; }).join(", ")}.</p>` : ""}
+      ${(r.realigned || []).length ? `<p class="small"><b>Realignment:</b> ${r.realigned.map((x) => `${esc(T(x.tid).region)} to the ${esc(L.confs[x.to].name)}`).join("; ")}.</p>` : ""}
       ${(r.portalIn || []).length ? `<p class="small">From the transfer portal: ${r.portalIn.map((id) => { const p = L.players.find((q) => q.pid === id); return p ? esc(p.first + " " + p.last) + ` <span class="mute">${p.pos}, ovr ${p.ovr}, from ${esc(T(p.from).region)}</span>` : ""; }).join(", ")}.</p>` : ""}
       ${(r.portalOut || []).length ? `<p class="small">Transferred out: ${r.portalOut.map((m) => esc(m.name) + ` <span class="mute">to ${esc(T(m.to).region)}</span>`).join(", ")}.</p>` : ""}
       ${r.walkons ? `<p class="small mute">${r.walkons} walk-on${r.walkons > 1 ? "s" : ""} filled the open roster spots.</p>` : ""}<p class="mute small">A new recruiting class is on the board, and your points reset for the year. Your rotation was re-sorted by overall.</p>
@@ -1350,6 +1378,8 @@
   document.addEventListener("input", (e) => { if (e.target.id === "rq") { S.rf.q = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(() => { render(); const el = $("rq"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250); } });
   document.addEventListener("change", (e) => {
     const id = e.target.id;
+    if (id === "setRealign") { L.settings = Object.assign({ realignPct: 25 }, L.settings, { realign: e.target.checked }); render(); persist(); return; }
+    if (id === "setRealignPct") { L.settings = Object.assign({}, L.settings, { realignPct: +e.target.value }); persist(); return; }
     if (id === "rrSeason") { S.rr.season = +e.target.value; render(); return; }
     if (id === "rrConf") { S.rr.cid = e.target.value; render(); return; }
     if (id === "rrTeam") { S.rr.tid = +e.target.value; render(); return; }

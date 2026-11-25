@@ -1205,7 +1205,7 @@
     for (const t of L.teams) {
       const r = L.rec[t.tid];
       const st = confStandings(L, t.cid).find((x) => x.tid === t.tid);
-      t.hist.push({ season: L.season, w: r.w, l: r.l, cw: r.cw, cl: r.cl, seed: st.seed, ct: confChamps[t.cid] === t.tid, ncaa: N.seedOf[t.tid] != null ? L.ncaaRes[t.tid] : -1, nseed: N.seedOf[t.tid] ?? null, prestige: t.prestige });
+      t.hist.push({ season: L.season, cid: t.cid, w: r.w, l: r.l, cw: r.cw, cl: r.cl, seed: st.seed, ct: confChamps[t.cid] === t.tid, ncaa: N.seedOf[t.tid] != null ? L.ncaaRes[t.tid] : -1, nseed: N.seedOf[t.tid] ?? null, prestige: t.prestige });
     }
     const uh = L.teams[u].hist[L.teams[u].hist.length - 1];
     if (ffTeams.includes(u)) L.coach.ff++;
@@ -1214,6 +1214,7 @@
     L.history.push({ season: L.season, champ: N.champ, runner: N.final.w === N.final.a ? N.final.b : N.final.a, ff: ffTeams, user: Object.assign({ tid: u }, uh), confChamps, regChamps });
     L.phase = "offseason";
     news(L, `${L.teams[N.champ].region} wins the national championship!`);
+    proposeRealignment(L);
     openPortal(L);
   }
   function progress(p) {
@@ -1378,8 +1379,69 @@
     rows.forEach((r, i) => (r.rk = i + 1));
     return rows;
   }
+
+  // ---------- conference realignment (optional, Settings) ----------
+  // At season's end, with the chosen chance, a few moves are proposed:
+  //  - a program that keeps winning its league and has outgrown it looks to move up to a stronger conference nearby
+  //  - a program stuck near the bottom of a league far above its level drops to a closer fit
+  // The person approves or rejects each one; approved moves take effect when the next season starts.
+  const REALIGN_MIN = 8, REALIGN_MAX = 18;
+  function confCenter(L, cid) { const g = L.confs[cid].tids.map((t) => L.teams[t].geo).filter(Boolean); if (!g.length) return null; return [g.reduce((a, x) => a + x[0], 0) / g.length, g.reduce((a, x) => a + x[1], 0) / g.length]; }
+  const confPres = (L, cid) => { const c = L.confs[cid]; return c.tids.reduce((a, t) => a + L.teams[t].prestige, 0) / c.tids.length; };
+  function proposeRealignment(L) {
+    const S0 = L.settings || {}; if (!S0.realign) return;
+    if (R() * 100 >= (S0.realignPct ?? 25)) return;
+    const size = L.confs.map((c) => c.tids.length), out = [], moved = new Set();
+    const center = L.confs.map((c) => confCenter(L, c.cid)), cp = L.confs.map((c) => confPres(L, c.cid));
+    const dist = (t, cid) => (t.geo && center[cid] ? mi(t.geo, center[cid]) : 9999);
+    const recent = (t) => t.hist.slice(-5);
+    // moving up: won the regular season 3+ times in 5 years and well above the league's level
+    const ups = L.teams.filter((t) => { const h = recent(t); return h.length >= 4 && h.filter((x) => x.seed === 1).length >= 3 && t.prestige >= cp[t.cid] + 12; })
+      .sort((a, b) => b.prestige - a.prestige);
+    for (const t of ups) {
+      if (out.length >= 3) break;
+      const opts = L.confs.filter((c) => c.cid !== t.cid && cp[c.cid] >= cp[t.cid] + 8 && cp[c.cid] <= t.prestige + 6 && size[c.cid] < REALIGN_MAX && dist(t, c.cid) < 900).sort((a, b) => dist(t, a.cid) - dist(t, b.cid));
+      if (!opts.length || size[t.cid] - 1 < REALIGN_MIN) continue;
+      const to = opts[0].cid, wins = recent(t).filter((x) => x.seed === 1).length;
+      out.push({ tid: t.tid, from: t.cid, to, why: `won the ${L.confs[t.cid].abbrev} regular season ${wins} times in ${recent(t).length} years and has outgrown the league`, ok: true });
+      size[t.cid]--; size[to]++; moved.add(t.tid);
+    }
+    // moving down: finished in the bottom three 4+ times in 5 years in a league far above its level
+    const downs = L.teams.filter((t) => { if (moved.has(t.tid)) return false; const h = recent(t), n = L.confs[t.cid].tids.length; return h.length >= 4 && h.filter((x) => x.seed > n - 3).length >= 4 && t.prestige <= cp[t.cid] - 20; })
+      .sort((a, b) => a.prestige - b.prestige);
+    for (const t of downs) {
+      if (out.length >= 3) break;
+      const opts = L.confs.filter((c) => c.cid !== t.cid && cp[c.cid] <= cp[t.cid] - 8 && cp[c.cid] >= t.prestige - 15 && size[c.cid] < REALIGN_MAX && dist(t, c.cid) < 900).sort((a, b) => dist(t, a.cid) - dist(t, b.cid));
+      if (!opts.length || size[t.cid] - 1 < REALIGN_MIN) continue;
+      const to = opts[0].cid;
+      out.push({ tid: t.tid, from: t.cid, to, why: `has finished near the bottom of the ${L.confs[t.cid].abbrev} year after year and fits a league closer to its level`, ok: true });
+      size[t.cid]--; size[to]++; moved.add(t.tid);
+    }
+    if (out.length) { L.realign = { season: L.season, items: out, decided: false }; news(L, `Conference realignment: ${out.length} move${out.length > 1 ? "s" : ""} proposed.`, true); }
+  }
+  function decideRealignment(L, oks) {
+    const P = L.realign; if (!P || P.decided) return;
+    P.items.forEach((x, i) => (x.ok = !!oks[i])); P.decided = true;
+  }
+  function applyRealignment(L) {
+    const P = L.realign; if (!P || P.season !== L.season) return [];
+    if (!P.decided) P.items.forEach((x) => (x.ok = false)); // never reviewed: nothing moves
+    const done = [];
+    for (const x of P.items) {
+      if (!x.ok) continue;
+      const t = L.teams[x.tid], from = L.confs[x.from], to = L.confs[x.to];
+      if (t.cid !== x.from || from.tids.length - 1 < REALIGN_MIN || to.tids.length >= REALIGN_MAX) continue;
+      from.tids = from.tids.filter((id) => id !== x.tid); to.tids.push(x.tid); t.cid = x.to;
+      (L.realignLog || (L.realignLog = [])).push({ season: L.season + 1, tid: x.tid, from: x.from, to: x.to });
+      news(L, `${t.region} moves from the ${from.name} to the ${to.name}.`, x.tid === L.userTid);
+      done.push(x);
+    }
+    L.realign = null;
+    return done;
+  }
   function startNextSeason(L) {
     if (L.phase !== "offseason") return;
+    const realigned = applyRealignment(L);
     resolvePortal(L);
     const u = L.userTid, recap = { season: L.season, grads: [], early: [], improved: [], recruits: [], walkons: 0 };
     updatePrestige(L);
@@ -1426,6 +1488,7 @@
     newRecruitClass(L);
     aiRedshirts(L);
     if (L.portal && L.portal.season === L.season - 1) { recap.portalIn = L.portal.moves.filter((m) => m.to === u && m.from !== u).map((m) => m.pid); recap.portalOut = L.portal.moves.filter((m) => m.from === u && m.to !== u); }
+    if (realigned.length) recap.realigned = realigned.map((x) => ({ tid: x.tid, from: x.from, to: x.to }));
     L.lastRecap = recap;
     news(L, `The ${L.season - 1}–${String(L.season).slice(2)} season tips off.`);
   }
@@ -1556,7 +1619,7 @@
     return o;
   }
 
-  const api = { tune, classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
+  const api = { decideRealignment, proposeRealignment, tune, classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
     RKEYS, RNAMES, POS, YR, MINUTES, DAYS, NCAA_ROUNDS, REGIONS, STAR_OVR,
     newWorld, claimSchool, newLeague, simGame, applyBox, playDay, playOneGame, gamesLeftToday, stageMatches, playNextUserGame, playDays, playWeek, playUntil, playToEnd, startNextSeason,
     confStandings, roster, autoDepth, calcOvr, teamRating, power, netRanks, updatePoll, selectField, expectations, blankLine, dayDate, dayOffset,
