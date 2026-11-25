@@ -481,7 +481,7 @@
     const B = E.portalBoard(L).filter((x) => !S.pf || S.pf === "all" || x.p.pos === S.pf);
     const chance = (x) => portalChance(x.offer, x.need);
     const cols = [
-      { k: "name", h: "Player", l: 1, v: (x) => x.p.last, f: (x) => `${plink(x.p)}<div class="mute small">${whyTxt(x.p.why)}</div>` },
+      { k: "name", h: "Player", l: 1, v: (x) => x.p.last, f: (x) => `${plink(x.p)}<div class="mute small">${whyTxt(x.p.why)}${x.reach < 0.5 ? ` · <span class="L">out of your league</span>` : ""}</div>` },
       { k: "pos", h: "Pos", v: (x) => x.p.pos, f: (x) => x.p.pos },
       { k: "yr", h: "Yr", v: (x) => x.p.yr, f: (x) => clsOf(x.p) },
       { k: "ovr", h: "Ovr", v: (x) => x.p.ovr, f: (x) => `<b>${x.p.ovr}</b>` },
@@ -495,7 +495,7 @@
     const pos = S.pf || "all";
     return phead("Transfer portal", `${P.ids.length} players are looking for a new school. Offers are settled when you start the ${seasonLabel(L.season + 1)} season.`, `<button class="btn play" data-act="newseason">Start ${seasonLabel(L.season + 1)} season</button>`) + `
       <div class="kpis">${kpi("Open roster spots", Math.max(0, open), open > 0 ? "after graduation and signees" : "your roster is full")}${kpi("Portal points", `<output id="pLeft">${P.budget - used}</output>`, `of ${P.budget} left`)}${kpi("Offers out", Object.keys(P.offers).length, "you can offer more players than you have spots")}${kpi("Your players in", mine.length, P.keep != null ? "1 convinced to stay" : "")}</div>
-      <div class="dash"><div class="s6">${mineCard}</div><div class="s6"><div class="card"><h3>How it works</h3><p class="small">Put points on the players you want. Each one picks his best offer: your points count most, then your prestige, how much he'd play behind your current roster, and how close you are to home. If more of your targets say yes than you have open spots, you get the best ones.</p><p class="small mute">"Points to lead" is an estimate. Offer a few more to be safe; rival schools vary.</p>${used ? `<button class="btn sm" data-act="pclear">Clear all offers</button>` : ""}</div></div>
+      <div class="dash"><div class="s6">${mineCard}</div><div class="s6"><div class="card"><h3>How it works</h3><p class="small">Put points on the players you want. Each one picks his best offer: your points count most, then your prestige, how much he'd play behind your current roster, and how close you are to home. If more of your targets say yes than you have open spots, you get the best ones.</p><p class="small">The best transfers care most about the program's name. Players far above your program's level hardly listen to your points, so they cost far more. Look for good players near your level instead.</p><p class="small mute">"Points to lead" is an estimate. Offer a few more to be safe; rival schools vary.</p>${used ? `<button class="btn sm" data-act="pclear">Clear all offers</button>` : ""}</div></div>
       <div class="s12"><div class="card"><div class="cardh"><h3>Players in the portal</h3><span class="seg">${["all", "PG", "SG", "SF", "PF", "C"].map((x) => `<button class="${pos === x ? "on" : ""}" data-act="pos:${x}">${x === "all" ? "All" : x}</button>`).join("")}</span></div>
       ${B.length ? table("portal", cols, B, { def: { k: "ovr", d: -1 }, limit: 150, rc: (x) => (x.offer ? "me" : "") }) : `<p class="mute">No players at this position.</p>`}</div></div></div>`;
   }

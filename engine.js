@@ -1208,8 +1208,11 @@
   function portalOpenings(L, tid, T) { T = T || portalTeams(L); return ROSTER_SIZE - T[tid].n; }
   function portalAppeal(L, p, tid, T) {
     const t = L.teams[tid], ahead = T[tid].ovr.filter((o) => o > p.ovr).length;
-    return t.prestige * 0.45 + Math.max(0, 8 - ahead) * 4 + (nearBoost(t, p) - 1) * 30;
+    // the better the player, the more the program's name matters to him
+    return t.prestige * (0.45 + Math.max(0, p.ovr - 50) * 0.025) + Math.max(0, 8 - ahead) * 4 + (nearBoost(t, p) - 1) * 30;
   }
+  // a player well above a school's level barely listens to its offers: each 4 rating points over its level cuts their value by 40%
+  function portalMult(L, p, tid) { const gap = p.ovr - teamTalent(L.teams[tid].prestige, p.yr + 1); return gap <= 4 ? 1 : Math.pow(0.6, (gap - 4) / 4); }
   const aiFits = (L, p, tid) => { const lvl = teamTalent(L.teams[tid].prestige, p.yr + 1); return p.ovr >= lvl - 6 && p.ovr <= lvl + 14; };
   function openPortal(L) {
     const all = L.players.map((p) => p.ovr).sort((a, b) => a - b), med = all[all.length >> 1];
@@ -1253,9 +1256,9 @@
     return L.players.filter((p) => p.portal && p.tid !== u).map((p) => {
       let bestAI = -1e9, by = null;
       for (const t of L.teams) { if (t.tid === p.tid || t.tid === u || !aiFits(L, p, t.tid)) continue; const s = portalAppeal(L, p, t.tid, T) + PORTAL_AI; if (s > bestAI) { bestAI = s; by = t.tid; } }
-      const mine = portalAppeal(L, p, u, T), k = PORTAL_K * nearBoost(L.teams[u], p);
+      const mine = portalAppeal(L, p, u, T), k = PORTAL_K * nearBoost(L.teams[u], p) * portalMult(L, p, u);
       const need = by == null ? 1 : Math.max(1, Math.ceil((bestAI - mine) / k));
-      return { p, need, rival: by, offer: P.offers[p.pid] || 0, dist: distance(L.teams[u], p) };
+      return { p, need, rival: by, offer: P.offers[p.pid] || 0, dist: distance(L.teams[u], p), reach: portalMult(L, p, u) };
     });
   }
   function resolvePortal(L) {
@@ -1267,7 +1270,7 @@
       for (const t of L.teams) {
         if (t.tid === from || need[t.tid] <= 0) continue;
         let s;
-        if (t.tid === u && !L.autoRec) { const off = P.offers[p.pid] || 0; if (!off) continue; s = portalAppeal(L, p, u, T) + off * PORTAL_K * nearBoost(t, p) + gauss(0, 6); }
+        if (t.tid === u && !L.autoRec) { const off = P.offers[p.pid] || 0; if (!off) continue; s = portalAppeal(L, p, u, T) + off * PORTAL_K * nearBoost(t, p) * portalMult(L, p, u) + gauss(0, 6); }
         else { if (!aiFits(L, p, t.tid)) continue; s = portalAppeal(L, p, t.tid, T) + PORTAL_AI + gauss(0, 6); }
         if (s > bs) { bs = s; best = t.tid; }
       }
