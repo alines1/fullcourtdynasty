@@ -61,7 +61,7 @@
   const NAV = [
     ["Team", [["home", "Overview", "home"], ["roster", "Roster", "roster"], ["schedule", "Schedule", "schedule"], ["recruiting", "Recruiting", "recruiting"], ["portal", "Transfer portal", "recruiting"], ["thistory", "History", "history"]]],
     ["Conference", [["standings", "Standings", "standings"], ["ctour", "Tournament", "bracket"], ["cleaders", "Leaders", "leaders"], ["cawards", "Awards & champions", "awards"]]],
-    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["recrank", "Recruiting rankings", "recruiting"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
+    ["Nation", [["scores", "Scores", "scores"], ["rankings", "Rankings", "rankings"], ["tourney", "National Tournament", "tourney"], ["nleaders", "Leaders", "leaders"], ["nawards", "Awards & champions", "awards"], ["summary", "Season summary", "history"], ["recrank", "Recruiting rankings", "recruiting"], ["coaches", "Coaches", "roster"], ["book", "Record book", "leaders"], ["records", "Program records", "standings"]]],
   ];
   function crumb() {
     for (const [g, items] of NAV) for (const [k, n] of items) if (S.view === k) return [g === "Conference" ? L.confs[S.cid ?? T(L.userTid).cid].name : g === "Team" ? T(L.userTid).region : "National", n];
@@ -184,7 +184,8 @@
       main = `<div class="card hero"><div class="cardh"><h3>Season complete</h3><span class="mute small">${seasonLabel(L.season)}</span></div>
         <p>${esc(t.region)} finished <b>${uh.w}–${uh.l}</b>, ${ordinal(uh.seed)} in the ${esc(C(u).name)}. ${uh.ncaa >= 0 ? `National Tournament: ${ncaaResult(uh.ncaa)} as a ${uh.nseed} seed.` : "No National Tournament bid."}</p>
         <table class="tape"><tbody><tr><td class="l mute">National champion</td><td class="l"><b>${tlink(h.champ, { rank: false })}</b> over ${tlink(h.runner, { rank: false })}</td></tr><tr><td class="l mute">Player of the Year</td><td class="l">${n(A.poy)}</td></tr><tr><td class="l mute">Freshman of the Year</td><td class="l">${n(A.foy)}</td></tr><tr><td class="l mute">Most Outstanding Player</td><td class="l">${n(A.mop)}</td></tr></tbody></table>
-        <div class="tools" style="margin:14px 0 0"><button class="btn" data-go="portal">Transfer portal</button><button class="btn play" data-act="newseason">Start ${seasonLabel(L.season + 1)} season</button><button class="btn" data-go="tourney">Final bracket</button></div>${portalNote()}</div>`;
+        <div class="tools" style="margin:14px 0 0"><button class="btn" data-go="portal">Transfer portal</button><button class="btn play" data-act="newseason">Start ${seasonLabel(L.season + 1)} season</button><button class="btn" data-go="tourney">Final bracket</button><button class="btn" data-act="cmodego:changes">Coaching changes</button></div>${portalNote()}</div>`;
+      main = offersCard() + main;
     } else if (ng) {
       const home = ng.home === u, opp = home ? ng.away : ng.home, a = teamLine(u), b = teamLine(opp);
       const where = ng.type === "ct" ? `${esc(C(u).abbrev)} tournament · ${esc(ng.round)}` : ng.type === "ncaa" ? `National Tournament · ${esc(ng.round)}` : ng.neutral ? "Neutral site" : home ? "Home" : "Away";
@@ -200,9 +201,10 @@
     }
 
     const c = L.coach, target = Math.min(st.length, exp.confRank + 1), onPace = me.seed <= target;
-    const outlook = `<div class="card"><div class="cardh"><h3>Expectations</h3><a data-go="thistory">Coach history</a></div>
+    const outlook = `<div class="card"><div class="cardh"><h3>Expectations</h3>${myCoach() ? `<a data-go="coach:${myCoach().id}">Coach page</a>` : `<a data-go="thistory">Coach history</a>`}</div>
       <table class="tape"><tbody><tr><td class="l mute">Board goal</td><td class="l">Top-${target} in the ${esc(C(u).abbrev)}${exp.ncaa ? " and a tournament bid" : ""}</td></tr><tr><td class="l mute">Current</td><td class="l"><b class="${onPace ? "W" : "L"}">${ordinal(me.seed)} place</b> · ${onPace ? "on track" : "behind"}</td></tr><tr><td class="l mute">${esc(coachName())}</td><td class="l">${c.w}–${c.l} career · ${c.apps} tournament bid${c.apps === 1 ? "" : "s"} · ${c.titles} title${c.titles === 1 ? "" : "s"}</td></tr><tr><td class="l mute">Program prestige</td><td class="l">${t.prestige} · ${ordinal(exp.natRank)} nationally</td></tr></tbody></table>
-      <p class="mute small" style="margin:10px 0 0">Job security and offers from other schools are next on the list.</p></div>`;
+      ${(() => { const js = E.jobSecurity && E.jobSecurity(L); return js ? `<table class="tape" style="margin-top:6px"><tbody><tr><td class="l mute">Job security</td><td class="l"><b class="${js.label === "Hot seat" ? "L" : js.label === "Secure" || js.label === "Can't be fired" ? "W" : ""}">${js.label}</b></td></tr></tbody></table>` : ""; })()}
+      <p class="mute small" style="margin:10px 0 0">Win more than a program your size is expected to and bigger schools will call after the season. Fall well short for a few years and you can be fired${(L.settings || {}).fire === false ? " (turned off in Settings)" : ""}.</p></div>`;
 
     const myGames = L.games.filter((g) => g.home === u || g.away === u).sort((x, y) => x.day - y.day);
     const played = myGames.filter((g) => g.played).slice(-4), upcoming = myGames.filter((g) => !g.played).slice(0, 4);
@@ -259,7 +261,7 @@
     const extra = [["gp", "GP"], ["min", "MPG"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]].map(([k, h]) => ({ k, h, v: (p) => statVal(curStats(p), k), f: (p) => (k === "gp" ? curStats(p)?.gp || 0 : f1(statVal(curStats(p), k))) }))
         .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s && s[a] ? s[m] / s[a] : -1; }, f: (p) => { const s = curStats(p); return s ? pct(s[m], s[a]) : "–"; } })));
     const inc = L.recruits.filter((r) => r.commit === tid).sort((a, b) => a.rank - b.rank);
-    return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${confLink(tid)} · ${t.city ? esc(t.city) + " · " : ""}${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
+    return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${confLink(tid)} · ${L.coaches ? "Coach " + coachLink(tid) + " · " : ""}${t.city ? esc(t.city) + " · " : ""}${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
       <div class="tools">${t.hist.length ? seasonOptions(tid, L.season) : ""}<button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
       ${table(id, base.concat(extra), ps, { rc: (p) => (p.depth < 5 ? "start" : "") + (p.depth === 4 ? " split" : "") })}
       ${inc.length ? `<h3 style="margin-top:18px">Committed for next season</h3><p>${inc.map((r) => `${stars(r.stars)} ${esc(r.first + " " + r.last)} <span class="mute">${r.pos} · No. ${r.rank}</span>`).join(" &nbsp; ")}</p>` : ""}
@@ -389,7 +391,7 @@
     const nav = `${prev ? `<button class="btn sm" data-go="teamyr:${tid}:${prev}">◀ ${seasonLabel(prev)}</button>` : ""}${seasonOptions(tid, y)}${next ? `<button class="btn sm" data-go="teamyr:${tid}:${next}">${seasonLabel(next)} ▶</button>` : ""}<button class="btn sm" data-go="team:${tid}">Current roster</button>`;
     const post = !h ? "–" : h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa)}` : "No bid";
     const banner = h ? `<div class="kpis">${kpi("Record", `${h.w}–${h.l}`, `${h.w + h.l ? Math.round((100 * h.w) / (h.w + h.l)) : 0}% wins`)}${kpi("Conference", `${h.cw}–${h.cl}`, `${ordinal(h.seed)} in the ${esc(L.confs[h.cid ?? t.cid].abbrev)}`)}${kpi("Conf. tournament", h.ct ? "Champions" : "–", h.ct ? "automatic bid" : "")}${kpi("National Tournament", wonAll ? "Champions" : h.ncaa >= 0 ? `${h.nseed} seed` : "No bid", wonAll ? `${h.nseed} seed` : h.ncaa >= 0 ? ncaaResult(h.ncaa) : "")}${kpi("Prestige", h.prestige ?? "–", "after the season")}</div>` : `<p class="mute">Season in progress or not on file.</p>`;
-    return teamHead(tid, `${seasonLabel(y)} ${esc(full(t))}`, `${confLink(tid)} · ${wonAll ? "<b>National champions</b> · " : ff ? "Final Weekend · " : ""}season archive`, nav) + banner + `
+    return teamHead(tid, `${seasonLabel(y)} ${esc(full(t))}`, `${confLink(tid)} · ${h && h.co != null && L.coaches ? "Coach " + clink(L.coaches[h.co]) + " · " : ""}${wonAll ? "<b>National champions</b> · " : ff ? "Final Weekend · " : ""}season archive`, nav) + banner + `
       ${rows.length ? table("tyr", cols, rows, { def: { k: "mpg", d: -1 } }) : `<p class="mute">No roster on file for this season.</p>`}
       <p class="mute small">Stats are per game for ${seasonLabel(y)}. Class is the player's year in the program that season. ${L.pastSince && y < L.pastSince ? "Some role players who left before rosters were archived may be missing." : ""}</p>`;
   }
@@ -554,6 +556,8 @@
       <div class="card" style="margin-top:16px"><div class="cardh"><h3>Pro draft · ${s}</h3><span class="seg"><button class="${!S.sumMine ? "on" : ""}" data-act="summine:0">All 60 picks</button><button class="${S.sumMine ? "on" : ""}" data-act="summine:1">Your players</button></span></div>
         ${dShow.length ? table("draft" + s, dcols, dShow, { def: { k: "pick", d: 1 }, rc: (d) => (d.tid === u ? "me" : "") + (d.pick === 30 ? " split" : "") }) : `<p class="mute">${S.sumMine ? "None of your players were drafted." : "No draft this season."}</p>`}
         <p class="mute small">Two rounds of 30 picks by a fictional pro league. Seniors and early entrants are in the pool; teams draft on current ability, upside, age and production.</p></div>
+      ${(() => { const cr = L.carousel && L.carousel[s] ? carouselRows(s).rows : []; if (!cr.length) return ""; const top = cr.slice().sort((x, y) => T(y.tid).prestige - T(x.tid).prestige).slice(0, 6);
+        return `<div class="card" style="margin-top:16px"><div class="cardh"><h3>Coaching changes</h3><a data-act="ccgo:${s}">All ${cr.length}</a></div><div class="scroll"><table><tbody>${top.map((x) => `<tr><td class="l">${tlink(x.tid, { rank: false })}</td><td class="l mute">${x.why === "Left" ? "coach hired away" : x.why === "Fired" ? "fired " + (x.old != null ? esc(cname(L.coaches[x.old])) : "") : x.why === "Retired" ? esc(cname(L.coaches[x.old])) + " retired" : ""}</td><td class="l">${clink(L.coaches[x.c])}${x.from >= 0 ? ` <span class="mute">from ${esc(T(x.from).region)}</span>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`; })()}
       <div class="card" style="margin-top:16px"><h3>Records set this season</h3>${recs.length ? `<ul class="reclist">${recs.slice(0, 14).join("")}</ul>${recs.length > 14 ? `<p class="mute small">+ ${recs.length - 14} more in the record book</p>` : ""}` : `<p class="mute">No National records fell this season.</p>`}<p class="small" style="margin:8px 0 0"><a data-go="book">Open the record book</a></p></div>`;
   }
 
@@ -561,7 +565,13 @@
   function vSettings() {
     const st = L.settings || {}, on = !!st.realign, pct = st.realignPct ?? 25, log = (L.realignLog || []).slice().reverse();
     const pend = L.realign && !L.realign.decided;
+    const fireOn = st.fire !== false;
     return phead("Settings", "Options for this league") + `<div class="dash">
+      <div class="s6"><div class="card"><h3>Job security</h3>
+        <label class="check"><input type="checkbox" id="setFire" ${fireOn ? "checked" : ""}> You can be fired</label>
+        <p class="small">When it's on, your school judges you like every other coach: miss what a program your size should do for a few seasons in a row and you can lose the job. You always get your first two seasons, and titles and deep tournament runs buy patience. If you're fired, a few schools a step down will want to talk to you.</p>
+        <p class="small mute">Job offers from bigger schools come either way. Turning this off only stops you from being fired.</p></div></div>
+      <div class="s6"></div>
       <div class="s6"><div class="card"><h3>Conference realignment</h3>
         <label class="check"><input type="checkbox" id="setRealign" ${on ? "checked" : ""}> Allow conference realignment</label>
         <div class="tools" style="margin-top:8px"><label for="setRealignPct" class="small">Chance of proposals each offseason</label><select id="setRealignPct" class="btn" ${on ? "" : "disabled"}>${[10, 25, 50, 100].map((v) => `<option value="${v}" ${v === pct ? "selected" : ""}>${v}%</option>`).join("")}</select></div>
@@ -701,6 +711,7 @@
   const portalChance = (offer, need) => (offer ? (offer >= need + 8 ? `<b class="W">Likely</b>` : offer >= need - 6 ? "Toss-up" : `<span class="L">Long shot</span>`) : "");
   function vPortal() {
     const P = L.portal, u = L.userTid;
+    if (L.fired && L.phase === "offseason") return phead("Transfer portal", "") + `<div class="card"><p>You don't have a school right now. Take one of your job offers on the <a data-go="home">Overview</a> and the portal opens for your new team.</p></div>`;
     if (!P || P.season !== L.season || L.phase !== "offseason") {
       const last = P && P.done ? P.moves.filter((m) => !m.back && (m.to === u || m.from === u)) : [];
       return phead("Transfer portal", "Opens after the national championship, before the next season starts") + `<div class="card"><p>Each offseason, players looking for a new school enter the portal: good players stuck on the bench, standouts who outgrew a smaller program, and a few who want a fresh start.</p><p>You get <b>one chance to convince one of your own players to stay</b>, and a pool of portal points (three weeks of recruiting points) to make offers. Every player picks his best offer when you start the next season, based on your offer, your prestige, how much he'd play, and distance from home.</p>${last.length ? `<h3 style="margin-top:14px">Last portal</h3><ul class="reclist">${last.map((m) => `<li>${m.to === u ? "In" : "Out"}: ${playerLink({ pid: m.pid, name: m.name })} <span class="mute">${m.pos}, ${m.to === u ? "from " + esc(T(m.from).region) : "to " + esc(T(m.to).region)}</span></li>`).join("")}</ul>` : ""}</div>`;
@@ -944,13 +955,13 @@
   }
   function vProgram(tid) {
     const u = L.userTid, t = T(tid), mine = tid === u, c = L.coach, o = progTotals(t);
-    const rows = t.hist.slice().reverse().map((h) => `<tr><td class="l"><a data-go="teamyr:${tid}:${h.season}" title="${esc(t.region)} roster, ${seasonLabel(h.season)}">${seasonLabel(h.season)}</a></td><td>${h.w}–${h.l}</td><td>${h.cw}–${h.cl}</td><td>${ordinal(h.seed)}</td><td>${h.ct ? "Won" : ""}</td><td class="l">${h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa).replace(/^lost in the /, "Lost in ").replace(/^won the /, "Won the ")}` : "–"}</td><td>${h.prestige}</td></tr>`).join("");
+    const rows = t.hist.slice().reverse().map((h) => `<tr><td class="l"><a data-go="teamyr:${tid}:${h.season}" title="${esc(t.region)} roster, ${seasonLabel(h.season)}">${seasonLabel(h.season)}</a></td><td>${h.w}–${h.l}</td><td>${h.cw}–${h.cl}</td><td>${ordinal(h.seed)}</td><td>${h.ct ? "Won" : ""}</td><td class="l">${h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa).replace(/^lost in the /, "Lost in ").replace(/^won the /, "Won the ")}` : "–"}</td><td class="l">${h.co != null && L.coaches ? clink(L.coaches[h.co]) : "–"}</td><td>${h.prestige}</td></tr>`).join("");
     const hon = honorsFor(tid);
-    const coachCard = mine ? `<div class="card" style="margin-bottom:16px"><div class="cardh"><h3>${esc(coachName())}</h3><span class="mute small">since ${seasonLabel(c.start || L.season)}</span></div><div class="kv"><div>Career<b>${c.w}–${c.l}</b></div><div>Win %<b>${c.w + c.l ? ((c.w / (c.w + c.l)) * 100).toFixed(1) : "–"}</b></div><div>Seasons<b>${c.seasons}</b></div><div>Conf tourney titles<b>${c.ctTitles}</b></div><div>Tournament bids<b>${c.apps}</b></div><div>Final Weekends<b>${c.ff}</b></div><div>National titles<b>${c.titles}</b></div></div></div>` : "";
+    const coachCard = mine && L.coach ? `<div class="card" style="margin-bottom:16px"><div class="cardh"><h3>${esc(coachName())}</h3>${myCoach() ? `<a data-go="coach:${myCoach().id}">Coach page</a>` : `<span class="mute small">since ${seasonLabel(c.start || L.season)}</span>`}</div><div class="kv"><div>Career<b>${c.w}–${c.l}</b></div><div>Win %<b>${c.w + c.l ? ((c.w / (c.w + c.l)) * 100).toFixed(1) : "–"}</b></div><div>Seasons<b>${c.seasons}</b></div><div>Conf tourney titles<b>${c.ctTitles}</b></div><div>Tournament bids<b>${c.apps}</b></div><div>Final Weekends<b>${c.ff}</b></div><div>National titles<b>${c.titles}</b></div></div></div>` : "";
     const right = mine ? `<button class="btn sm" data-go="records">Program records</button>` : `<button class="btn sm" data-go="team:${tid}">Roster</button><button class="btn sm" data-go="schedule:${tid}">Schedule</button><select id="histSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`;
-    return phead(`${esc(full(t))} history`, `${esc(C(tid).name)} · prestige ${t.prestige}${o.seasons ? ` · ${o.seasons} season${o.seasons === 1 ? "" : "s"} on record` : ""}`, right) + coachCard + `
+    return phead(`${esc(full(t))} history`, `${esc(C(tid).name)}${L.coaches ? " · Coach " + coachLink(tid) : ""} · prestige ${t.prestige}${o.seasons ? ` · ${o.seasons} season${o.seasons === 1 ? "" : "s"} on record` : ""}`, right) + coachCard + `
       <div class="card" style="margin-bottom:16px"><h3>Program totals</h3><div class="kv"><div>Record<b>${o.w}–${o.l}</b></div><div>National titles<b>${o.titles}</b></div><div>Final Weekends<b>${o.ff}</b></div><div>Regional finals<b>${o.e8}</b></div><div>Round of 16s<b>${o.s16}</b></div><div>Tournament bids<b>${o.bids}</b></div><div>Conf tourney titles<b>${o.ct}</b></div><div>Reg. season titles<b>${o.reg}</b></div></div></div>
-      <div class="stackcol"><div class="card"><h3>Season by season</h3>${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th>Overall</th><th>Conf</th><th>Finish</th><th>Conf tourney</th><th class="l">Nationals</th><th>Prestige</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mute">Starts after the first completed season.</p>`}</div>
+      <div class="stackcol"><div class="card"><h3>Season by season</h3>${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th>Overall</th><th>Conf</th><th>Finish</th><th>Conf tourney</th><th class="l">Nationals</th><th class="l">Coach</th><th>Prestige</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mute">Starts after the first completed season.</p>`}</div>
       ${programRecordsCard(t)}
       ${prosCard(tid)}
       <div class="card"><h3>Player honors</h3>${hon.length ? `<div class="scroll"><table><tbody>${hon.map(([s, lab, x]) => `<tr><td class="l">${seasonLabel(s)}</td><td class="l">${esc(lab)}</td>${awardCell(x)}</tr>`).join("")}</tbody></table></div>` : `<p class="mute">No award winners yet.</p>`}</div></div>`;
@@ -1025,19 +1036,123 @@
     const ys = new Set(L.history.map((h) => h.season)); for (const s in A) if (A[s].conf && A[s].conf[cid]) ys.add(+s);
     const H = new Map(L.history.map((h) => [h.season, h]));
     const rows = [...ys].sort((x, y) => y - x).map((y) => { const h = H.get(y), aw = A[y] && A[y].conf ? A[y].conf[cid] : null;
-      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h && h.regChamps && h.regChamps[cid] != null ? tlink(h.regChamps[cid], { rank: false }) : "–"}</td><td class="l">${h && h.confChamps && h.confChamps[cid] != null ? tlink(h.confChamps[cid], { rank: false }) : "–"}</td>${awardCell(aw && aw.poy)}${awardCell(aw && aw.foy)}</tr>`; }).join("");
+      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h && h.regChamps && h.regChamps[cid] != null ? tlink(h.regChamps[cid], { rank: false }) : "–"}</td><td class="l">${h && h.confChamps && h.confChamps[cid] != null ? tlink(h.confChamps[cid], { rank: false }) : "–"}</td>${awardCell(aw && aw.poy)}${awardCell(aw && aw.foy)}${coyCell(aw && aw.coy)}</tr>`; }).join("");
     return phead(`${esc(c.abbrev)} awards & champions`, esc(c.name), confSel(cid)) + `
-      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Regular season champion</th><th class="l">Tournament champion</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
+      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Regular season champion</th><th class="l">Tournament champion</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Coach of the Year</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
   }
   function vNatAwards() {
     const A = L.awards || {}, H = new Map(L.history.map((h) => [h.season, h]));
     const ys = new Set(L.history.map((h) => h.season)); for (const s in A) if (A[s].poy || A[s].mop) ys.add(+s);
     const rows = [...ys].sort((x, y) => y - x).map((y) => { const h = H.get(y), a = A[y] || {};
-      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h ? `<b>${tlink(h.champ, { rank: false })}</b>` : "–"}</td><td class="l">${h ? tlink(h.runner, { rank: false }) : "–"}</td><td class="l small">${h ? h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ") : "–"}</td>${awardCell(a.poy)}${awardCell(a.foy)}${awardCell(a.mop, a.mop ? `${a.mop.tppg} ppg · ${a.mop.trpg} rpg in ${a.mop.tg} tournament games` : "")}</tr>`; }).join("");
+      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h ? `<b>${tlink(h.champ, { rank: false })}</b>` : "–"}</td><td class="l">${h ? tlink(h.runner, { rank: false }) : "–"}</td><td class="l small">${h ? h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ") : "–"}</td>${awardCell(a.poy)}${awardCell(a.foy)}${awardCell(a.mop, a.mop ? `${a.mop.tppg} ppg · ${a.mop.trpg} rpg in ${a.mop.tg} tournament games` : "")}${coyCell(a.coy)}</tr>`; }).join("");
     return phead("National awards & champions", "National") + `
-      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">National champion</th><th class="l">Runner-up</th><th class="l">Other Final Weekend teams</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament MOP</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
+      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">National champion</th><th class="l">Runner-up</th><th class="l">Other Final Weekend teams</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament MOP</th><th class="l">Coach of the Year</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
   }
 
+
+  // ---------- coaches ----------
+  const cname = (c) => (c.first ? c.first + " " : "") + c.last;
+  const clink = (c) => (c ? `<a data-go="coach:${c.id}">${esc(cname(c))}</a>` : "–");
+  const coachLink = (tid) => clink(E.coachOf(L, tid));
+  const myCoach = () => (L.coaches && L.coach ? L.coaches[L.coach.id] : null);
+  const coyCell = (x) => (x && L.coaches ? `<td class="l">${clink(L.coaches[x.id])} <span class="mute">${esc(T(x.tid).abbrev)}</span><div class="small mute">${x.w}–${x.l}</div></td>` : `<td class="l mute">–</td>`);
+  function coachStatus(c) {
+    if (c.retired != null) return `Retired after ${seasonLabel(c.retired)}`;
+    if (c.tid < 0) return `Out of coaching since ${seasonLabel(c.out ?? L.season)}`;
+    return `Head coach at ${tlink(c.tid, { rank: false })} since ${seasonLabel(c.since)}`;
+  }
+  function vCoach(id) {
+    const c = L.coaches && L.coaches[id];
+    if (!c) return phead("Coach", "") + `<p class="mute">No coach found.</p>`;
+    const k = E.coachCareer(c), mine = c.user;
+    const js = mine && c.tid === L.userTid ? E.jobSecurity(L) : null;
+    const rows = c.hist.slice().reverse().map((h) => { const [y, tid, w, l, cw, cl, nc, , ct, pres, ns] = h; const th = T(tid).hist.find((x) => x.season === y);
+      return `<tr><td class="l"><a data-go="teamyr:${tid}:${y}">${seasonLabel(y)}</a></td><td class="l">${tlink(tid, { rank: false })}</td><td>${w}–${l}</td><td>${cw}–${cl}</td><td>${th ? ordinal(th.seed) : "–"}</td><td>${ct ? "Won" : ""}</td><td class="l">${nc >= 0 ? `${ns ?? "?"} seed · ${ncaaResult(nc).replace(/^lost in the /, "Lost in ").replace(/^won the /, "Won the ")}` : "–"}</td><td>${pres}</td></tr>`; }).join("");
+    const by = new Map(); for (const h of c.hist) { const o = by.get(h[1]) || { tid: h[1], n: 0, w: 0, l: 0, b: 0, ff: 0, t: 0, from: h[0], to: h[0] }; o.n++; o.w += h[2]; o.l += h[3]; if (h[6] >= 0) o.b++; if (h[6] >= 5) o.ff++; if (h[6] === 7) o.t++; o.to = h[0]; by.set(h[1], o); }
+    const schools = [...by.values()].sort((a, b) => a.from - b.from).map((o) => `<tr><td class="l">${tlink(o.tid, { rank: false })}</td><td class="l mute">${seasonLabel(o.from)}${o.to !== o.from ? " to " + seasonLabel(o.to) : ""}</td><td>${o.n}</td><td>${o.w}–${o.l}</td><td>${pct(o.w, o.w + o.l)}</td><td>${o.b}</td><td>${o.ff}</td><td>${o.t}</td></tr>`).join("");
+    const MV = { hired: "Hired", fired: "Fired", retired: "Retired" };
+    const moves = (c.moves || []).slice().reverse().map(([y, tid, how]) => `<tr><td class="l">${how === "hired" ? seasonLabel(y + 1) : seasonLabel(y)}</td><td class="l">${MV[how] || how}${tid >= 0 ? ` ${how === "hired" ? "by" : how === "fired" ? "by" : "from"} ${tlink(tid, { rank: false })}` : ""}</td></tr>`).join("");
+    const rt = (key) => `<tr><td class="l">${E.CNAMES[key]}<div class="small mute">${key === "g" ? "A small edge in games" : key === "rec" ? "Recruits and transfers value the school's interest more" : "Players improve more each offseason"}</div></td><td><b>${c.r[key]}</b></td></tr>`;
+    const t = c.tid >= 0 ? T(c.tid) : null;
+    return (t ? teamHead(c.tid, esc(cname(c)), `${coachStatus(c)} · age ${c.age}${c.town ? " · from " + esc(c.town) : ""}`, mine ? "" : `<button class="btn sm" data-go="coaches">All coaches</button>`) : phead(esc(cname(c)), `${coachStatus(c)} · age ${c.age}`, `<button class="btn sm" data-go="coaches">All coaches</button>`)) + `
+      <div class="kpis">${kpi("Career", `${k.w}–${k.l}`, k.w + k.l ? `${pct(k.w, k.w + k.l)}% wins${c.pre ? ` since ${seasonLabel(c.pre)}` : ""}` : c.pre ? `Records start in ${seasonLabel(c.pre)}` : "No games yet")}${kpi("Seasons", k.seasons, `${by.size} school${by.size === 1 ? "" : "s"}`)}${kpi("Tournament bids", k.apps, `${k.ff} Final Weekend${k.ff === 1 ? "" : "s"}`)}${kpi("National titles", k.titles, `${k.reg} reg. season · ${k.ct} conf. tourney`)}${kpi("Overall", E.cOvr(c), "Coach rating")}${js ? kpi("Job security", js.label, mine && (L.settings || {}).fire === false ? "Turned off in Settings" : "") : ""}</div>
+      ${awardPills(c.awards)}
+      <div class="dash"><div class="s4"><div class="card"><h3>Ratings</h3><table class="tape"><tbody>${rt("g")}${rt("rec")}${rt("dev")}</tbody></table><p class="mute small" style="margin:10px 0 0">Ratings grow with experience and winning, and slip with age.</p></div>
+        <div class="card" style="margin-top:16px"><h3>Career moves</h3>${moves ? `<div class="scroll"><table><tbody>${moves}</tbody></table></div>` : `<p class="mute">None yet.</p>`}</div></div>
+      <div class="s8"><div class="card"><h3>By school</h3>${schools ? `<div class="scroll"><table><thead><tr><th class="l">School</th><th class="l">Seasons</th><th>Years</th><th>W–L</th><th>Win %</th><th>Bids</th><th>Final Weekends</th><th>Titles</th></tr></thead><tbody>${schools}</tbody></table></div>` : `<p class="mute">No completed seasons yet.</p>`}</div>
+        <div class="card" style="margin-top:16px"><h3>Season by season</h3>${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">School</th><th>Overall</th><th>Conf</th><th>Finish</th><th>Conf tourney</th><th class="l">Nationals</th><th>Prestige</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mute">Starts after the first completed season.</p>`}</div></div></div>`;
+  }
+  // a short reason for a coaching change: who left, why, and where the new coach came from
+  function carouselRows(y) {
+    const ev = (L.carousel || {})[y] || [], out = new Map();
+    for (const e of ev) if (e.t === "fired" || e.t === "retired") out.set(e.tid, { c: e.c, why: e.t === "fired" ? "Fired" : "Retired" });
+    for (const e of ev) if (e.t === "hired" && e.from >= 0) out.set(e.from, { c: e.c, why: "Left", to: e.tid });
+    const rows = [];
+    for (const e of ev) {
+      if (e.t !== "hired") continue;
+      const o = out.get(e.tid) || {}, c = L.coaches[e.c], first = !c.hist.some((h) => h[0] <= y) && e.from < 0 && e.sat == null;
+      rows.push({ tid: e.tid, old: o.c, why: o.why || "Open", to: o.to, c: e.c, from: e.from, sat: e.sat, first });
+    }
+    return { rows, stayed: ev.filter((e) => e.t === "stayed") };
+  }
+  function vCoaches() {
+    if (!L.coaches) return phead("Coaches", "") + `<p class="mute">No coaches in this league yet.</p>`;
+    const mode = S.cmode || "list";
+    const seg = `<span class="seg"><button class="${mode === "list" ? "on" : ""}" data-act="cmode:list">Head coaches</button><button class="${mode === "free" ? "on" : ""}" data-act="cmode:free">Available</button><button class="${mode === "changes" ? "on" : ""}" data-act="cmode:changes">Coaching changes</button></span>`;
+    if (mode === "changes") {
+      const ys = Object.keys(L.carousel || {}).map(Number).filter((y) => (L.carousel[y] || []).length).sort((a, b) => b - a);
+      if (!ys.length) return phead("Coaching changes", "After each season, coaches are fired, retire, or get hired away", seg) + `<div class="card"><p class="mute">The first coaching carousel runs after the national championship.</p></div>`;
+      const y = ys.includes(S.ccSeason) ? S.ccSeason : ys[0];
+      const { rows, stayed } = carouselRows(y);
+      const sel = `<select id="ccSeason" class="btn" aria-label="Season">${ys.map((v) => `<option value="${v}" ${v === y ? "selected" : ""}>After ${seasonLabel(v)}</option>`).join("")}</select>`;
+      const cols = [
+        { k: "school", h: "School", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid, { rank: false }) },
+        { k: "conf", h: "Conf", l: 1, v: (r) => C(r.tid).abbrev, f: (r) => esc(C(r.tid).abbrev) },
+        { k: "pres", h: "Prestige", v: (r) => T(r.tid).prestige, f: (r) => T(r.tid).prestige },
+        { k: "old", h: "Departed", l: 1, v: (r) => (r.old != null ? L.coaches[r.old].last : "~"), f: (r) => (r.old != null ? clink(L.coaches[r.old]) : "–") },
+        { k: "why", h: "Why", l: 1, v: (r) => r.why, f: (r) => (r.why === "Left" ? `Hired by ${tlink(r.to, { rank: false })}` : r.why) },
+        { k: "new", h: "New coach", l: 1, v: (r) => L.coaches[r.c].last, f: (r) => clink(L.coaches[r.c]) + (L.coaches[r.c].user ? ` <span class="pill">You</span>` : "") },
+        { k: "from", h: "Came from", l: 1, v: (r) => (r.from >= 0 ? T(r.from).region : r.first ? "~a" : "~b"), f: (r) => (r.from >= 0 ? tlink(r.from, { rank: false }) : r.first ? `<span class="mute">First head coaching job</span>` : r.sat ? `<span class="mute">Back after ${r.sat} year${r.sat === 1 ? "" : "s"} out</span>` : `<span class="mute">Out of a job</span>`) },
+      ];
+      const fired = rows.filter((r) => r.why === "Fired").length, ret = rows.filter((r) => r.why === "Retired").length, left = rows.filter((r) => r.why === "Left").length;
+      return phead("Coaching changes", `${rows.length} head coaching changes after the ${seasonLabel(y)} season · ${fired} fired · ${ret} retired · ${left} hired away`, seg + sel) + `
+        <div class="card">${table("carousel", cols, rows, { def: { k: "pres", d: -1 }, rc: (r) => (r.tid === L.userTid || r.from === L.userTid ? "me" : "") })}</div>
+        ${stayed.length ? `<div class="card" style="margin-top:16px"><h3>Turned down a bigger job</h3><div class="scroll"><table><thead><tr><th class="l">Coach</th><th class="l">Stayed at</th><th class="l">Turned down</th></tr></thead><tbody>${stayed.map((e) => `<tr><td class="l">${clink(L.coaches[e.c])}</td><td class="l">${tlink(e.tid, { rank: false })}</td><td class="l">${tlink(e.offer, { rank: false })}</td></tr>`).join("")}</tbody></table></div></div>` : ""}`;
+    }
+    const cid = S.coachConf ?? "all";
+    const free = mode === "free";
+    let list = free ? L.coaches.filter((c) => c.tid < 0 && c.retired == null) : L.teams.filter((t) => cid === "all" || String(t.cid) === cid).map((t) => E.coachOf(L, t.tid)).filter(Boolean);
+    const K = new Map(list.map((c) => [c.id, E.coachCareer(c)]));
+    const ten = (c) => (c.tid >= 0 ? L.season - c.since + (L.phase === "offseason" ? 0 : 1) : 0);
+    const cols = [
+      { k: "name", h: "Coach", l: 1, v: (c) => c.last, f: (c) => clink(c) + (c.user ? ` <span class="pill">You</span>` : "") },
+      free ? { k: "last", h: "Last job", l: 1, v: (c) => { const h = c.hist[c.hist.length - 1]; return h ? T(h[1]).region : "~"; }, f: (c) => { const h = c.hist[c.hist.length - 1]; return h ? tlink(h[1], { rank: false }) : "–"; } }
+        : { k: "school", h: "School", l: 1, v: (c) => T(c.tid).region, f: (c) => tlink(c.tid, { rank: false }) },
+      free ? { k: "out", h: "Out Since", v: (c) => c.out ?? 0, f: (c) => seasonLabel(c.out ?? L.season) } : { k: "conf", h: "Conf", l: 1, v: (c) => C(c.tid).abbrev, f: (c) => esc(C(c.tid).abbrev) },
+      { k: "age", h: "Age", v: (c) => c.age }, { k: "ovr", h: "Ovr", v: (c) => E.cOvr(c), f: (c) => `<b>${E.cOvr(c)}</b>` },
+      { k: "g", h: "Game", t: "Game coaching", v: (c) => c.r.g, f: (c) => c.r.g }, { k: "rec", h: "Rec", t: "Recruiting", v: (c) => c.r.rec, f: (c) => c.r.rec }, { k: "dev", h: "Dev", t: "Development", v: (c) => c.r.dev, f: (c) => c.r.dev },
+    ].concat(free ? [] : [{ k: "ten", h: "Yrs", t: "Seasons at this school", v: ten, f: ten }]).concat([
+      { k: "wl", h: "Career W–L", v: (c) => K.get(c.id).w, f: (c) => `${K.get(c.id).w}–${K.get(c.id).l}` },
+      { k: "wp", h: "Win %", v: (c) => { const k = K.get(c.id); return k.w + k.l ? k.w / (k.w + k.l) : -1; }, f: (c) => { const k = K.get(c.id); return pct(k.w, k.w + k.l); } },
+      { k: "apps", h: "Bids", v: (c) => K.get(c.id).apps, f: (c) => K.get(c.id).apps }, { k: "ff", h: "FW", t: "Final Weekends", v: (c) => K.get(c.id).ff, f: (c) => K.get(c.id).ff },
+      { k: "titles", h: "Titles", v: (c) => K.get(c.id).titles, f: (c) => K.get(c.id).titles },
+    ]);
+    const filt = free ? "" : `<label for="coachConf" class="small mute">Conference</label><select id="coachConf" class="btn" aria-label="Conference"><option value="all">All conferences</option>${confOptions(cid)}</select>`;
+    return phead(free ? "Available coaches" : "Head coaches", free ? `${list.length} coaches without a job. Fired coaches wait for a school that wants them; after three years out, most leave coaching.` : `${list.length} head coaches · click a column to sort`, seg + filt) + `
+      <div class="card">${list.length ? table(free ? "cfree" : "coaches", cols, list, { def: { k: free ? "ovr" : "ovr", d: -1 }, rc: (c) => (c.user ? "me" : "") }) : `<p class="mute">Nobody right now.</p>`}
+      <p class="mute small">Game coaching gives a small edge in games, recruiting makes recruits and transfers value a school's interest more, and development helps players improve each offseason. Ovr is the average of the three.</p></div>`;
+  }
+  // job offers and job security on the Overview
+  function offersCard() {
+    const offers = L.offers || [];
+    if (L.phase !== "offseason" || !offers.length) return "";
+    const fired = L.fired, u = L.userTid;
+    const row = (tid) => { const t = T(tid), h = t.hist[t.hist.length - 1]; return `<tr><td class="l">${tlink(tid, { rank: false })}</td><td class="l">${esc(C(tid).name)}</td><td>${t.prestige}</td><td>${h ? `${h.w}–${h.l}` : "–"}</td><td><button class="btn sm play" data-act="takejob:${tid}">Take the job</button></td></tr>`; };
+    return `<div class="card hero" style="margin-bottom:16px"><div class="cardh"><h3>${fired ? "You've been fired" : "Job offers"}</h3><span class="mute small">Decide before the ${seasonLabel(L.season + 1)} season starts</span></div>
+      <p>${fired ? `${esc(T(u).region)} has let you go. These schools want to talk to you about their head coaching job; pick one to keep coaching.` : `Your work at ${esc(T(u).region)} has been noticed. ${offers.length === 1 ? "A school wants" : "These schools want"} you as their next head coach. Leaving means a new roster, a new recruiting board and new expectations.`}</p>
+      <div class="scroll"><table><thead><tr><th class="l">School</th><th class="l">Conference</th><th>Prestige</th><th>Last Season</th><th></th></tr></thead><tbody>${offers.map(row).join("")}</tbody></table></div>
+      ${fired ? "" : `<div class="tools" style="margin:12px 0 0"><button class="btn" data-act="stayjob">Stay at ${esc(T(u).region)}</button><span class="mute small">Starting the next season without answering also means you stay.</span></div>`}</div>`;
+  }
 
   // ---------- save / new ----------
   function vLeague() {
@@ -1104,22 +1219,25 @@
       case "teamyr": html = vTeamSeason(S.tid, S.ry); break;
       case "tourney": html = vTourney(); break;
       case "league": html = vLeague(); break;
+      case "coach": html = vCoach(S.coachId); break;
+      case "coaches": html = vCoaches(); break;
       default: html = vHome();
     }
-    const same = S._lastView === S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "");
+    const same = S._lastView === S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "") + ":" + (S.coachId ?? "");
     const keepX = {}, keepY = same ? window.scrollY : 0;
     if (same) for (const el of $("main").querySelectorAll(".scroll[data-tk]")) keepX[el.dataset.tk] = el.scrollLeft;
     $("main").innerHTML = headCase(html);
     if (same) { for (const el of $("main").querySelectorAll(".scroll[data-tk]")) if (keepX[el.dataset.tk]) el.scrollLeft = keepX[el.dataset.tk]; window.scrollTo(0, keepY); }
-    S._lastView = S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "");
+    S._lastView = S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "") + ":" + (S.coachId ?? "");
     requestAnimationFrame(() => B.drawAll($("main")));
   }
   const histStack = [];
   function go(target, noPush) {
     const [v, id, extra] = target.split(":");
-    if (!noPush) histStack.push({ view: S.view, tid: S.tid, pid: S.pid, gid: S.gid, ry: S.ry });
+    if (!noPush) histStack.push({ view: S.view, tid: S.tid, pid: S.pid, gid: S.gid, ry: S.ry, coachId: S.coachId });
     if (v === "team") { const tid = +id; if (tid === L.userTid) S.view = "roster"; else { S.view = "team"; S.tid = tid; } }
     else if (v === "player") { S.view = "player"; S.pid = +id; }
+    else if (v === "coach") { S.view = "coach"; S.coachId = +id; }
     else if (v === "teamyr") { const tid = +id, y = +extra; if (y === L.season) { if (tid === L.userTid) S.view = "roster"; else { S.view = "team"; S.tid = tid; } } else { S.view = "teamyr"; S.tid = tid; S.ry = y; } }
     else if (v === "box") { S.view = "box"; S.gid = +id; }
     else if (v === "schedule") { S.view = "schedule"; S.tid = id != null ? +id : null; }
@@ -1163,6 +1281,12 @@
     else if (k === "toct") sim(() => { E.playDay(L); return L.phase === "regular"; }, "Regular season complete");
     else if (k === "toncaa") sim(() => { E.playDay(L); return L.phase === "regular" || L.phase === "conftour"; }, "", ["conftour"], false);
     else if (k === "toend") sim(() => { E.playDay(L); return L.phase !== "offseason"; }, "", ["conftour", "ncaa"], false);
+    else if (k === "takejob") { if (E.acceptOffer(L, +v)) { S.view = "home"; projCache = null; render(); persist(); toast(`You're the new head coach at ${T(L.userTid).region}.`); } }
+    else if (k === "stayjob") { E.declineOffers(L); render(); persist(); }
+    else if (k === "cmode") { S.cmode = v; render(); }
+    else if (k === "cmodego") { S.cmode = v; go("coaches"); }
+    else if (k === "ccgo") { S.cmode = "changes"; S.ccSeason = +v; go("coaches"); }
+    else if (k === "newseason" && L.fired && (L.offers || []).length) { go("home"); toast("Pick your next job first."); }
     else if (k === "newseason") { E.startNextSeason(L); S.view = "home"; projCache = null; render(); persist(); showRecap(); }
     else if (k === "rmode") { S.rmode = v; render(); }
     else if (k === "go") { go(v); }
@@ -1388,6 +1512,7 @@
   document.addEventListener("input", (e) => { if (e.target.id === "rq") { S.rf.q = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(() => { render(); const el = $("rq"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250); } });
   document.addEventListener("change", (e) => {
     const id = e.target.id;
+    if (id === "setFire") { L.settings = Object.assign({}, L.settings, { fire: e.target.checked }); render(); persist(); return; }
     if (id === "setRealign") { L.settings = Object.assign({ realignPct: 25 }, L.settings, { realign: e.target.checked }); render(); persist(); return; }
     if (id === "setRealignPct") { L.settings = Object.assign({}, L.settings, { realignPct: +e.target.value }); persist(); return; }
     if (id === "rrSeason") { S.rr.season = +e.target.value; render(); return; }
@@ -1411,6 +1536,8 @@
     else if (id === "confSel") { S.cid = +e.target.value; render(); }
     else if (id === "histSel") { go("progh:" + e.target.value); }
     else if (id === "recConf") { S.recConf = e.target.value; render(); }
+    else if (id === "coachConf") { S.coachConf = e.target.value; render(); }
+    else if (id === "ccSeason") { S.ccSeason = +e.target.value; render(); }
     else if (id === "sumSel") { S.sumSeason = +e.target.value; render(); }
     else if (id === "sdaySel") { S.sday = +e.target.value; render(); }
     else if (id === "sfilSel") { S.sfil = e.target.value; render(); }

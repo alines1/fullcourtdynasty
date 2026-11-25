@@ -132,6 +132,7 @@
     for (const p of L.recruits || []) if (p.geo === undefined) { const h = pickHome(); p.town = h.town; p.geo = h.geo; changed = true; }
     for (const p of L.players) if (p.geo === undefined) { p.geo = null; }
     for (const t of L.teams) if (t.pace == null) { t.pace = Math.round(clamp(gauss(0, 3.2), -8, 8) * 10) / 10; changed = true; }
+    if (!L.coaches && L.coach && L.userTid >= 0) { ensureCoaches(L); changed = true; }
     return changed;
   }
 
@@ -219,6 +220,7 @@
     }
     L.userTid = userTid;
     L.coach = { name: coachName || "Coach", w: 0, l: 0, seasons: 0, ctTitles: 0, apps: 0, ff: 0, titles: 0, start: L.season, schools: [userTid] };
+    if (!L.coaches) { ensureCoaches(L); }
     for (const t of L.teams) setBudget(L, t, true);
     makeSchedule(L);
     newRecruitClass(L);
@@ -230,7 +232,14 @@
   function newWorld(pack) { const L = newLeague(0, "Coach", null, pack); L.news = []; return L; }
   function claimSchool(L, tid, coachName) {
     L.userTid = tid;
+    const prevId = L.coach && L.coach.id;
     L.coach = { name: coachName || "Coach", w: 0, l: 0, seasons: 0, ctTitles: 0, apps: 0, ff: 0, titles: 0, start: L.season, schools: [tid] };
+    if (L.coaches && prevId != null) {
+      // the person's coach takes this school's slot; that school's coach moves to the placeholder school
+      const uc = L.coaches[prevId], old = uc.tid, ai = coachOf(L, tid);
+      if (ai && ai !== uc && old >= 0) { L.teams[old].coach = ai.id; ai.tid = old; ai.moves = [[ai.since - 1, old, "hired"]]; }
+      L.teams[tid].coach = uc.id; L.coach.id = uc.id; makeUserCoach(L, tid, coachName);
+    } else ensureCoaches(L);
     L.news = []; news(L, `${L.coach.name && L.coach.name !== "Coach" ? "Coach " + L.coach.name : "A new coach"} takes over at ${L.teams[tid].region}.`);
     return L;
   }
@@ -350,7 +359,8 @@
     // (about +24 per game for a top-5 team, around 0 near 200th, -17 at the very bottom), so balance holds in any era
     const B = tqBounds(L);
     const M = (t) => (B ? CURVE_K * rankMargin(B.rs, t) : SLOPE_LO * Math.min(t, MID_LO) + SLOPE_MID * clamp(t - MID_LO, 0, MID_HI - MID_LO) + SLOPE_HI * Math.max(0, t - MID_HI));
-    sides.forEach((s, i) => (s.q = clamp(Q_A * (M(TQ[i]) - M(TQ[1 - i])) - Q_B * (TQ[i] - TQ[1 - i]), -0.12, 0.12)));
+    const CE = sides.map((s) => coachEdge(L, s.tid)); // head coaches: a point or so either way at the extremes
+    sides.forEach((s, i) => (s.q = clamp(Q_A * (M(TQ[i]) - M(TQ[1 - i]) + CE[i] - CE[1 - i]) - Q_B * (TQ[i] - TQ[1 - i]), -0.12, 0.12)));
     const neutral = g.neutral;
     // pace: each program has its own tempo; the game lands between the two
     const N = Math.round(clamp(68 + ((L.teams[g.home].pace || 0) + (L.teams[g.away].pace || 0)) / 2 + gauss(0, 2), 56, 82));
@@ -692,7 +702,8 @@
     const free = L.recruits.filter((r) => r.commit == null);
     const buckets = [[], [], [], [], [], []]; for (const r of free) buckets[r.stars].push(r);
     const byId = new Map(L.recruits.map((r) => [r.pid, r]));
-    const give = (tid, rc, pts) => { rc.int[tid] = (rc.int[tid] || 0) + pts * nearBoost(L.teams[tid], rc); };
+    const rm = L.teams.map((t) => recMult(L, t.tid));
+    const give = (tid, rc, pts) => { rc.int[tid] = (rc.int[tid] || 0) + pts * nearBoost(L.teams[tid], rc) * rm[tid]; };
     for (const t of L.teams) {
       const ai = t.tid !== L.userTid || L.autoRec;
       const need = left[t.tid];
@@ -1205,8 +1216,10 @@
     for (const t of L.teams) {
       const r = L.rec[t.tid];
       const st = confStandings(L, t.cid).find((x) => x.tid === t.tid);
-      t.hist.push({ season: L.season, cid: t.cid, w: r.w, l: r.l, cw: r.cw, cl: r.cl, seed: st.seed, ct: confChamps[t.cid] === t.tid, ncaa: N.seedOf[t.tid] != null ? L.ncaaRes[t.tid] : -1, nseed: N.seedOf[t.tid] ?? null, prestige: t.prestige });
+      t.hist.push({ season: L.season, cid: t.cid, w: r.w, l: r.l, cw: r.cw, cl: r.cl, seed: st.seed, ct: confChamps[t.cid] === t.tid, ncaa: N.seedOf[t.tid] != null ? L.ncaaRes[t.tid] : -1, nseed: N.seedOf[t.tid] ?? null, prestige: t.prestige, co: t.coach ?? null });
     }
+    coachSeason(L);
+    coachAwards(L);
     const uh = L.teams[u].hist[L.teams[u].hist.length - 1];
     if (ffTeams.includes(u)) L.coach.ff++;
     if (N.champ === u) L.coach.titles++;
@@ -1214,11 +1227,12 @@
     L.history.push({ season: L.season, champ: N.champ, runner: N.final.w === N.final.a ? N.final.b : N.final.a, ff: ffTeams, user: Object.assign({ tid: u }, uh), confChamps, regChamps });
     L.phase = "offseason";
     news(L, `${L.teams[N.champ].region} wins the national championship!`);
+    runCarousel(L);
     proposeRealignment(L);
     openPortal(L);
   }
-  function progress(p) {
-    const base = [0, 4.4, 3.2, 2.4, 1.6][p.yr] || 1, room = (p.pot - p.ovr) * 0.2, dev = gauss(0, 2.5);
+  function progress(p, coachDev) {
+    const base = [0, 4.4, 3.2, 2.4, 1.6][p.yr] || 1, room = (p.pot - p.ovr) * 0.2, dev = gauss(0, 2.5) + (coachDev || 0);
     for (const k of RKEYS) p.r[k] = Math.round(clamp(p.r[k] + (base + room) * rnd(0.5, 1.5) * 0.7 + dev + gauss(0, 2.2) + (k === "ath" ? -1 : 0), 10, 99));
     const prev = p.ovr; p.ovr = calcOvr(p.r);
     p.pot = Math.round(clamp(Math.max(p.ovr, p.pot + gauss(0, 2) - 1), p.ovr, 99));
@@ -1280,7 +1294,8 @@
   function portalAppeal(L, p, tid, T) {
     const t = L.teams[tid], ahead = T[tid].ovr.filter((o) => o > p.ovr).length;
     // the better the player, the more the program's name matters to him
-    return t.prestige * (0.45 + Math.max(0, p.ovr - 50) * 0.025) + Math.max(0, 8 - ahead) * 4 + (nearBoost(t, p) - 1) * 30;
+    const c = coachOf(L, tid);
+    return t.prestige * (0.45 + Math.max(0, p.ovr - 50) * 0.025) + Math.max(0, 8 - ahead) * 4 + (nearBoost(t, p) - 1) * 30 + (c ? (c.r.rec - 50) * 0.25 : 0);
   }
   // a player well above a school's level barely listens to its offers: each 4 rating points over its level cuts their value by 40%
   function portalMult(L, p, tid) { const gap = p.ovr - teamTalent(L.teams[tid].prestige, p.yr + 1); return gap <= 4 ? 1 : Math.pow(0.6, (gap - 4) / 4); }
@@ -1441,6 +1456,7 @@
   }
   function startNextSeason(L) {
     if (L.phase !== "offseason") return;
+    if (L.coaches) coachOffseason(L);
     const realigned = applyRealignment(L);
     resolvePortal(L);
     const u = L.userTid, recap = { season: L.season, grads: [], early: [], improved: [], recruits: [], walkons: 0 };
@@ -1455,7 +1471,7 @@
     recap.redshirts = [];
     for (const p of L.players) {
       const medical = p.inj && p.inj.g === 99 && p.inj.s === L.season && (p.stats[L.season]?.gp || 0) <= 9 && !p.rsUsed && !p.rs;
-      const d = progress(p);
+      const d = progress(p, devBonus(L, p.tid));
       p.dOvr = d; // change in overall from last season, shown next to his rating
       if (p.rs || medical) { p.rsUsed = true; p.rs = false; if (p.tid === u) recap.redshirts.push({ name: p.first + " " + p.last, medical }); }
       else p.yr++;
@@ -1493,6 +1509,296 @@
     news(L, `The ${L.season - 1}–${String(L.season).slice(2)} season tips off.`);
   }
 
+  // ---------- coaches ----------
+  // Every program has a head coach with three ratings: game coaching (a small edge in games), recruiting
+  // (recruits and transfers count his school's interest for more) and development (players improve faster).
+  // After each season the carousel runs: coaches who badly miss expectations get fired, overachievers get
+  // hired away by bigger programs (most take the job), older coaches retire, and fired coaches wait for a
+  // job that fits their reputation; some sit out a year or more.
+  const CK = ["g", "rec", "dev"];
+  const CNAMES = { g: "Game coaching", rec: "Recruiting", dev: "Development" };
+  // coach season row: [season, tid, w, l, cw, cl, ncaa result (-1 = missed), regular-season title, conference tournament title, prestige, national seed]
+  const CH = { y: 0, tid: 1, w: 2, l: 3, cw: 4, cl: 5, ncaa: 6, reg: 7, ct: 8, pres: 9, seed: 10 };
+  const cOvr = (c) => Math.round((c.r.g + c.r.rec + c.r.dev) / 3);
+  const coachOf = (L, tid) => (L.coaches && L.teams[tid] && L.teams[tid].coach != null ? L.coaches[L.teams[tid].coach] : null);
+  const coachEdge = (L, tid) => { const c = coachOf(L, tid); return c ? ((c.r.g - 50) / 45) * 1.5 : 0; };      // points of margin
+  const recMult = (L, tid) => { const c = coachOf(L, tid); return c ? 0.8 + c.r.rec * 0.004 : 1; };             // 50 = 1.0, 90 = 1.16
+  const devBonus = (L, tid) => { const c = coachOf(L, tid); return c ? ((c.r.dev - 50) / 45) * 0.9 : 0; };     // rating points per year
+  const coachLevel = (pres) => 38 + pres * 0.32;
+  function coachName(c) { return c.first + " " + c.last; }
+  function makeCoach(L, level, age) {
+    const home = pickHome(), r = {};
+    for (const k of CK) r[k] = Math.round(clamp(coachLevel(level) + gauss(0, 9), 20, 95));
+    const c = {
+      id: L.coaches.length, first: pick(home.nf || (NM && NM.US_FIRST) || FIRST), last: pick(home.nl || (NM && NM.US_LAST) || LAST),
+      age: Math.round(age ?? clamp(gauss(50, 8), 31, 71)), town: home.town, r, tid: -1, since: null, hist: [], awards: [],
+      heat: 0, seat: 0, ra: Math.round(gauss(0, 4)), out: null, retired: null, moves: [],
+    };
+    L.coaches.push(c);
+    return c;
+  }
+  function hire(L, c, tid, how) {
+    const t = L.teams[tid];
+    c.tid = tid; c.since = L.season + 1; c.out = null; c.seat = 0;
+    t.coach = c.id;
+    c.moves.push([L.season, tid, how || "hired"]);
+  }
+  // build coaches for a league (new games, and saves made before coaches existed)
+  function ensureCoaches(L) {
+    if (L.coaches) return false;
+    L.coaches = [];
+    for (const t of L.teams) {
+      const c = makeCoach(L, t.prestige + gauss(0, 8));
+      const ten = Math.min(Math.floor(-Math.log(1 - R()) * 5), c.age - 32, 22);
+      c.tid = t.tid; c.since = L.season - ten; t.coach = c.id; c.moves.push([c.since - 1, t.tid, "hired"]);
+      // a little history so the first carousel isn't blind: established coaches start with some standing
+      c.heat = gauss(0, 1.5); c.seat = gauss(0.5, 1.5);
+      c.pre = L.season; // records start with this league
+    }
+    if (L.userTid >= 0 && L.coach) {
+      makeUserCoach(L, L.userTid, L.coach.name);
+      // a save from before coaches: rebuild the person's record from the program's history
+      const uc = L.coaches[L.coach.id];
+      for (const h of L.teams[L.userTid].hist) if (h.season >= (L.coach.start || L.season)) uc.hist.push([h.season, L.userTid, h.w, h.l, h.cw, h.cl, h.ncaa, h.seed === 1 ? 1 : 0, h.ct ? 1 : 0, h.prestige, h.nseed ?? null]);
+      uc.since = L.coach.start || L.season;
+    }
+    L.carousel = L.carousel || {};
+    return true;
+  }
+  // the person's coach takes over the school's coach slot
+  function makeUserCoach(L, tid, name) {
+    const t = L.teams[tid];
+    let c = coachOf(L, tid);
+    if (!c || c.hist.length) { c = makeCoach(L, 0); }
+    const parts = String(name || "Coach").trim().split(/\s+/);
+    c.first = parts.length > 1 ? parts.slice(0, -1).join(" ") : ""; c.last = parts[parts.length - 1];
+    c.age = 40; c.ra = 0; c.user = true; c.town = null; c.hist = []; c.awards = []; c.heat = 0; c.seat = 0; c.moves = [[L.season - 1, tid, "hired"]];
+    const base = Math.max(50, Math.round(coachLevel(t.prestige) - 5));
+    c.r = { g: base, rec: base, dev: base };
+    c.tid = tid; c.since = L.season; t.coach = c.id;
+    L.coach.id = c.id;
+    return c;
+  }
+  // how a season went against what the program expects: the same yardstick as prestige
+  function coachSeason(L) {
+    const N = L.ncaa, raw = new Map(), ts = [0, 0, 0, 0, 0], tn = [0, 0, 0, 0, 0];
+    for (const t of L.teams) { const tier = L.confs[t.cid].tier, d = rawPrestigeDelta(t, t.hist[t.hist.length - 1]); raw.set(t.tid, d); ts[tier] += d; tn[tier]++; }
+    for (const t of L.teams) {
+      const c = coachOf(L, t.tid); if (!c) continue;
+      const h = t.hist[t.hist.length - 1];
+      c.hist.push([L.season, t.tid, h.w, h.l, h.cw, h.cl, h.ncaa, h.seed === 1 ? 1 : 0, h.ct ? 1 : 0, h.prestige, h.nseed ?? null]);
+      const tier = L.confs[t.cid].tier, d = raw.get(t.tid) - ts[tier] / tn[tier];
+      c.lp = d;
+      c.heat = c.heat * 0.5 + d;   // recent overachievement: what other schools notice
+      c.seat = c.seat * 0.6 + d;   // what his own school's patience runs on
+      if (N && N.champ === t.tid) c.heat += 2;
+    }
+  }
+  function coachCareer(c) {
+    const o = { w: 0, l: 0, apps: 0, ff: 0, titles: 0, reg: 0, ct: 0, seasons: c.hist.length };
+    for (const h of c.hist) { o.w += h[2]; o.l += h[3]; if (h[6] >= 0) o.apps++; if (h[6] >= 5) o.ff++; if (h[6] === 7) o.titles++; o.reg += h[7]; o.ct += h[8]; }
+    return o;
+  }
+  function coachAwards(L) {
+    const A = L.awards[L.season] || (L.awards[L.season] = { conf: {} });
+    const sc = (t) => { const c = coachOf(L, t.tid), h = t.hist[t.hist.length - 1]; if (!c || !h) return -1e9; const wp = h.w / Math.max(1, h.w + h.l); return (c.lp || 0) + wp * 6 + (h.ncaa >= 0 ? h.ncaa * 0.6 : 0); };
+    const rowOf = (t) => { const c = coachOf(L, t.tid), h = t.hist[t.hist.length - 1]; return { id: c.id, name: coachName(c), tid: t.tid, w: h.w, l: h.l }; };
+    let best = null, bs = -1e9;
+    for (const t of L.teams) { const s = sc(t) + t.prestige * 0.02; if (s > bs) { bs = s; best = t; } }
+    if (best) { A.coy = rowOf(best); coachOf(L, best.tid).awards.push({ s: L.season, a: "National Coach of the Year" }); news(L, `${coachName(coachOf(L, best.tid))} of ${best.region} is the National Coach of the Year.`, best.tid === L.userTid); }
+    for (const cf of L.confs) {
+      let b = null, s0 = -1e9;
+      for (const tid of cf.tids) { const s = sc(L.teams[tid]); if (s > s0) { s0 = s; b = L.teams[tid]; } }
+      if (!b) continue;
+      (A.conf[cf.cid] || (A.conf[cf.cid] = {})).coy = rowOf(b);
+      coachOf(L, b.tid).awards.push({ s: L.season, a: cf.abbrev + " Coach of the Year" });
+      if (b.tid === L.userTid) news(L, `${coachName(coachOf(L, b.tid))} is ${cf.name} Coach of the Year.`, true);
+    }
+  }
+  // what a coach is worth on the market
+  function marketValue(L, c) {
+    const k = coachCareer(c);
+    let v = cOvr(c) + clamp(c.heat, -6, 10) * 2.8 + Math.min(12, k.titles * 4 + k.ff * 1.2);
+    if (c.tid < 0) v -= 9 + (L.season - (c.out ?? L.season)) * 3;   // fired, and every year out of the game
+    if (c.age > 60) v -= (c.age - 60) * 1.5;
+    return v;
+  }
+  // the level of job a coach can reach: a step up from where he is, further after a big run
+  function jobFits(L, c, pres) {
+    if (c.tid >= 0) {
+      const cur = L.teams[c.tid].prestige;
+      return c.heat > 1 && pres >= cur + 4 && pres <= cur + 20 + Math.max(0, c.heat) * 3; // only coaches on the rise get poached
+    }
+    const last = c.lastPres ?? 40;
+    return pres <= last - 4 + Math.max(0, coachCareer(c).titles * 6) && pres >= last - 45;
+  }
+  function retireChance(c, champ) {
+    const a = c.age + (c.ra || 0);
+    let p = a < 55 ? 0.001 : Math.min(0.6, 0.012 * Math.exp((a - 55) * 0.17));
+    if (champ && a >= 60) p *= 2;                      // going out on top
+    if (c.lp != null && c.lp < -2 && a >= 60) p *= 1.5; // a rough year nudges an older coach toward the door
+    return p;
+  }
+  function fireChance(L, c, t) {
+    const ten = L.season - c.since + 1;               // seasons completed at this school
+    if (ten <= 1) return 0;
+    const k = coachCareer({ hist: c.hist.filter((h) => h[1] === t.tid) });
+    const legend = k.titles * 4 + k.ff * 1.5;
+    const imp = 0.7 + t.prestige / 100;               // big programs run out of patience faster
+    const z = -c.seat * imp - 4.5 - legend;
+    return (1 / (1 + Math.exp(-z))) * (ten === 2 ? 0.35 : ten === 3 ? 0.75 : 1);
+  }
+  const log = (L, e) => { (L.carousel[L.season] || (L.carousel[L.season] = [])).push(e); };
+  // fill one opening: the school picks among coaches who'd fit; most hired-away coaches say yes
+  function fillJob(L, tid, queue) {
+    const t = L.teams[tid], P = t.prestige;
+    const pool = L.coaches.filter((c) => c.retired == null && !c.user && c.tid !== tid && c.since !== L.season + 1 && (c.tid < 0 ? L.season - (c.out ?? 0) <= 3 : true) && jobFits(L, c, P));
+    // assistants and rising coaches from below are always in the mix
+    const fresh = []; for (let i = 0; i < 2; i++) fresh.push({ fresh: true, level: P + gauss(-4, 6), age: clamp(gauss(41, 5), 30, 55) });
+    const val = (c) => (c.fresh ? coachLevel(c.level) - 2 + gauss(0, 4) : marketValue(L, c) + gauss(0, 3));
+    let cands = pool.map((c) => [c, val(c)]).concat(fresh.map((f) => [f, val(f)])).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    for (let tries = 0; tries < 8 && cands.length; tries++) {
+      const top = cands[0][1];
+      const [c] = wpick(cands, (x) => Math.exp((x[1] - top) / 2.5));
+      cands = cands.filter((x) => x[0] !== c);
+      if (c.fresh) {
+        const n = makeCoach(L, c.level, c.age);
+        hire(L, n, tid, "hired");
+        log(L, { t: "hired", tid, c: n.id, from: -1 });
+        return n;
+      }
+      if (c.tid >= 0) {
+        const cur = L.teams[c.tid], ten = L.season - c.since + 1;
+        let yes = 0.95;
+        if (ten >= 8) yes -= 0.12;
+        if (c.age >= 62) yes -= 0.15;
+        if (P - cur.prestige < 10) yes -= 0.15;
+        if (R() > yes) { log(L, { t: "stayed", tid: c.tid, c: c.id, offer: tid }); continue; } // turned it down to stay
+        const from = c.tid;
+        L.teams[from].coach = null;
+        hire(L, c, tid, "hired");
+        log(L, { t: "hired", tid, c: c.id, from });
+        queue.push(from);
+        return c;
+      }
+      const sat = L.season - (c.out ?? L.season);
+      hire(L, c, tid, "hired");
+      log(L, { t: "hired", tid, c: c.id, from: -1, sat });
+      return c;
+    }
+    const n = makeCoach(L, P - 4, rint(34, 48)); hire(L, n, tid, "hired"); log(L, { t: "hired", tid, c: n.id, from: -1 });
+    return n;
+  }
+  // would this school want the person? (they're judged like everyone else)
+  function userCandidate(L, tid) {
+    const uc = L.coaches[L.coach.id], t = L.teams[tid];
+    if (!uc || t.tid === L.userTid) return false;
+    if (L.fired) return t.prestige <= (uc.lastPres ?? 40) - 4;
+    return uc.heat > 1.5 && (uc.lp || 0) > 0 && jobFits(L, uc, t.prestige) && marketValue(L, uc) >= coachLevel(t.prestige) - 2;
+  }
+  function runCarousel(L) {
+    if (!L.coaches) ensureCoaches(L);
+    const N = L.ncaa, open = [], set = L.settings || {};
+    L.carousel[L.season] = L.carousel[L.season] || [];
+    L.offers = []; L.fired = false;
+    for (const t of L.teams) {
+      const c = coachOf(L, t.tid);
+      if (!c) { open.push(t.tid); continue; }
+      if (c.user) {
+        if (set.fire !== false && R() < fireChance(L, c, t)) {
+          L.fired = true; c.lastPres = t.prestige; c.out = L.season; c.tid = -1; t.coach = null; c.moves.push([L.season, t.tid, "fired"]);
+          log(L, { t: "fired", tid: t.tid, c: c.id }); open.push(t.tid);
+          news(L, `${t.region} has fired ${coachName(c)}.`, true);
+        }
+        continue;
+      }
+      if (R() < retireChance(c, N && N.champ === t.tid)) {
+        c.retired = L.season; c.tid = -1; t.coach = null; c.moves.push([L.season, t.tid, "retired"]);
+        log(L, { t: "retired", tid: t.tid, c: c.id }); open.push(t.tid);
+        continue;
+      }
+      if (R() < fireChance(L, c, t)) {
+        c.lastPres = t.prestige; c.out = L.season; c.tid = -1; t.coach = null; c.moves.push([L.season, t.tid, "fired"]);
+        log(L, { t: "fired", tid: t.tid, c: c.id }); open.push(t.tid);
+      }
+    }
+    // the person's offers: the best jobs that want them are held until they decide (up to three)
+    const uc = L.coaches[L.coach.id];
+    if (uc) {
+      const want = open.filter((tid) => userCandidate(L, tid) && tid !== L.userTid).sort((a, b) => L.teams[b].prestige - L.teams[a].prestige);
+      let offers = L.fired ? want.slice(0, 3) : want.filter(() => R() < 0.8).slice(0, 3);
+      if (L.fired && offers.length < 2) {
+        // fired coaches always find something, usually a step down
+        const lo = open.filter((tid) => tid !== L.userTid && !offers.includes(tid)).sort((a, b) => Math.abs(L.teams[a].prestige - (uc.lastPres - 15)) - Math.abs(L.teams[b].prestige - (uc.lastPres - 15)));
+        offers = offers.concat(lo.slice(0, 2 - offers.length));
+      }
+      L.offers = offers;
+      if (offers.length) news(L, `${offers.length === 1 ? "A school wants" : offers.length + " schools want"} to talk to you about their head coaching job.`, true);
+    }
+    // fill the rest, biggest jobs first; each coach who moves up opens a job below him
+    const held = new Set(L.offers);
+    if (L.fired) held.add(L.userTid);  // the person's old school waits until they pick their next job
+    fillChain(L, open.filter((tid) => !held.has(tid)));
+  }
+  function fillChain(L, queue) { let g = 0; while (queue.length && g++ < 600) { queue.sort((a, b) => L.teams[b].prestige - L.teams[a].prestige); fillJob(L, queue.shift(), queue); } }
+  // the person takes a job offer: their old school hires, and the move ripples down
+  function acceptOffer(L, tid) {
+    if (L.phase !== "offseason" || !(L.offers || []).includes(tid)) return false;
+    const uc = L.coaches[L.coach.id], old = L.userTid, t = L.teams[tid];
+    if (!L.fired) { L.teams[old].coach = null; }
+    uc.tid = tid; uc.since = L.season + 1; uc.out = null; uc.seat = 0; t.coach = uc.id; uc.moves.push([L.season, tid, "hired"]);
+    log(L, { t: "hired", tid, c: uc.id, from: L.fired ? -1 : old });
+    L.userTid = tid;
+    L.coach.schools = (L.coach.schools || []).concat(tid);
+    const rest = L.offers.filter((x) => x !== tid);
+    L.offers = []; L.fired = false; L.plan = {};
+    const q = rest.slice(); if (L.teams[old].coach == null) q.push(old);
+    fillChain(L, q);
+    // the transfer portal follows the person to their new school
+    if (L.portal && !L.portal.done) {
+      const P = L.portal;
+      P.mine = P.ids.filter((pid) => { const p = L.players.find((x) => x.pid === pid); return p && p.tid === tid; });
+      P.keep = null; P.offers = {}; P.budget = Math.round(L.teams[tid].rb * PORTAL_WEEKS);
+    }
+    news(L, `${coachName(uc)} is the new head coach at ${t.region}.`, true);
+    return true;
+  }
+  function declineOffers(L) {
+    if (!L.offers || !L.offers.length || L.fired) return false;
+    const q = L.offers.slice(); L.offers = []; fillChain(L, q); return true;
+  }
+  // between seasons: everyone ages; young coaches improve, success sharpens them, age dulls them; idle coaches drift away
+  function coachOffseason(L) {
+    if (L.offers && L.offers.length) {
+      if (L.fired) acceptOffer(L, L.offers[0]);
+      else declineOffers(L);
+    }
+    for (const c of L.coaches) {
+      if (c.retired != null) continue;
+      c.age++;
+      const drift = c.age < 45 ? 1 : c.age < 58 ? 0.3 : c.age < 64 ? -0.2 : -0.9;
+      for (const k of CK) c.r[k] = Math.round(clamp(c.r[k] + gauss(drift, 1.2) + (c.tid >= 0 ? clamp(c.lp || 0, -3, 4) * 0.25 : 0), 15, 97));
+      if (c.tid < 0 && !c.user) {
+        const out = L.season - (c.out ?? L.season);
+        if (out >= 3 || (c.age >= 64 && out >= 1 && R() < 0.5)) { c.retired = L.season; c.moves.push([L.season, -1, "retired"]); }
+      }
+    }
+  }
+
+  // how safe the person's job looks right now, from past seasons plus this season so far
+  function jobSecurity(L) {
+    const c = L.coaches && L.coach ? L.coaches[L.coach.id] : null, t = L.teams[L.userTid];
+    if (!c || c.tid !== t.tid) return null;
+    let seat = c.seat;
+    const r = L.rec && L.rec[t.tid];
+    if (L.phase !== "offseason" && r && r.w + r.l) {
+      const gp = r.w + r.l, wp = r.w / gp, expWp = clamp(0.24 + t.prestige * 0.0064, 0.24, 0.87);
+      seat = c.seat * 0.6 + (wp - expWp) * 15 * Math.min(1, gp / 31);
+    }
+    const ch = Math.max(fireChance(L, Object.assign({}, c, { seat, since: L.phase === "offseason" ? c.since : c.since }), t), 0);
+    const label = L.settings && L.settings.fire === false ? "Can't be fired" : ch < 0.03 ? "Secure" : ch < 0.12 ? "Stable" : ch < 0.35 ? "Warm seat" : "Hot seat";
+    return { chance: ch, label, seat };
+  }
   function expectations(L) {
     const t = L.teams[L.userTid], c = L.confs[t.cid];
     const rank = c.tids.slice().sort((a, b) => L.teams[b].prestige - L.teams[a].prestige).indexOf(t.tid) + 1;
@@ -1619,7 +1925,7 @@
     return o;
   }
 
-  const api = { decideRealignment, proposeRealignment, tune, classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
+  const api = { ensureCoaches, coachOf, cOvr, coachCareer, acceptOffer, declineOffers, CK, CNAMES, CH, jobSecurity, marketValue, decideRealignment, proposeRealignment, tune, classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
     RKEYS, RNAMES, POS, YR, MINUTES, DAYS, NCAA_ROUNDS, REGIONS, STAR_OVR,
     newWorld, claimSchool, newLeague, simGame, applyBox, playDay, playOneGame, gamesLeftToday, stageMatches, playNextUserGame, playDays, playWeek, playUntil, playToEnd, startNextSeason,
     confStandings, roster, autoDepth, calcOvr, teamRating, power, netRanks, updatePoll, selectField, expectations, blankLine, dayDate, dayOffset,
