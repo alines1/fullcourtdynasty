@@ -80,12 +80,35 @@
     if (L.phase === "ncaa") return "National Tournament · " + E.NCAA_ROUNDS[L.ncaa.stage];
     return "Offseason";
   }
+  // one box per game this season: green win, red loss, outlined next game; circles for postseason
+  function resultStrip() {
+    const u = L.userTid, r = L.rec[u];
+    const gs = L.games.filter((g) => g.home === u || g.away === u).sort((a, b) => a.day - b.day || a.gid - b.gid);
+    if (!gs.length) return "";
+    const nextG = gs.find((g) => !g.played);
+    let last = null, out = "";
+    for (const g of gs) {
+      const grp = g.type === "conf" ? "conf" : g.type === "nc" ? "nc" : "post";
+      if (last && grp !== last) out += `<span class="gsep"></span>`;
+      last = grp;
+      const home = g.home === u, opp = home ? g.away : g.home, where = g.neutral ? "vs." : home ? "vs." : "at";
+      const tag = g.type === "ct" ? `${C(u).abbrev} tournament · ` : g.type === "ncaa" ? "National Tournament · " : "";
+      if (g.played) {
+        const us = home ? g.hs : g.as, them = home ? g.as : g.hs, w = us > them;
+        out += `<span class="gb ${w ? "W" : "L"}${grp === "post" ? " post" : ""}" data-go="${L.boxes[g.gid] ? "box:" + g.gid : "schedule"}" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region} · ${w ? "W" : "L"} ${us}–${them}${g.ot ? " (OT)" : ""}`)}">${w ? "W" : "L"}</span>`;
+      } else {
+        out += `<span class="gb${g === nextG ? " next" : ""}${grp === "post" ? " post" : ""}" data-go="schedule" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region}${g === nextG ? " · next game" : ""}`)}"></span>`;
+      }
+    }
+    return `<span class="lab"><b>${r.w}–${r.l}</b> · ${r.cw}–${r.cl} ${esc(C(u).abbrev)}</span>${out}`;
+  }
   function shell() {
     const brand = `<div class="brand"><i></i>Full Court Dynasty</div>`;
     if (!L) {
       document.documentElement.style.setProperty("--tc", "#d9480f");
       $("side").innerHTML = brand + `<p class="mute small" style="margin:6px 18px">Pick a school to start your career. Every page opens once you've taken a job.</p>`;
       $("top").innerHTML = `<button id="navBtn" aria-label="Menu">${icon("standings")}</button><div class="crumb"><small>New career</small><b>Take a job</b></div>`;
+      $("strip").innerHTML = "";
       return;
     }
     const t = T(L.userTid), r = L.rec[L.userTid];
@@ -95,6 +118,9 @@
       `<div class="me-card" data-go="home" tabindex="0" role="button">${logo(t, 38)}<div style="min-width:0"><b>${rkTag(t.tid)}${esc(full(t))}</b><span>${r.w}–${r.l} · ${r.cw}–${r.cl} ${esc(C(t.tid).abbrev)} · NET ${NET[t.tid]}</span></div></div>` +
       NAV.map(([g, items]) => `<div class="navg"><h4>${g === "Conference" ? esc(C(t.tid).abbrev) + " · Conference" : g}</h4>${items.map(([k, n, ic]) => `<button class="nav${onView(k) ? " on" : ""}" data-go="${k}">${icon(ic)}${n}${k === "recruiting" && Object.keys(L.plan).length ? `<span class="ct">${L.recruits.filter((x) => x.commit === L.userTid).length}/${E.openSlots(L, L.userTid)}</span>` : ""}</button>`).join("")}</div>`).join("") +
       `<div class="side-foot"><button class="nav${S.view === "league" ? " on" : ""}" data-go="league">${icon("save")}Save &amp; league</button><button class="nav${S.view === "about" ? " on" : ""}" data-go="about">About &amp; help</button><div class="status" id="status">${esc(saveLine())}</div></div>`;
+    const sEl = $("strip"); sEl.innerHTML = resultStrip();
+    const focus = sEl.querySelector(".gb.next") || [...sEl.querySelectorAll(".gb")].pop();
+    if (focus && sEl.scrollWidth > sEl.clientWidth) sEl.scrollLeft = Math.max(0, focus.offsetLeft - sEl.clientWidth * 0.6);
     const [g, n] = crumb();
     $("top").innerHTML = `<button id="navBtn" aria-label="Menu">${icon("standings")}</button><div class="crumb"><small>${esc(g)}</small><b>${esc(n)}</b></div>
       <div class="when"><b>${seasonLabel(L.season)}</b><br>${phaseLabel()}</div>
