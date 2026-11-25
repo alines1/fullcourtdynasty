@@ -95,9 +95,9 @@
       const tag = g.type === "ct" ? `${C(u).abbrev} tournament · ` : g.type === "ncaa" ? "National Tournament · " : "";
       if (g.played) {
         const us = home ? g.hs : g.as, them = home ? g.as : g.hs, w = us > them;
-        out += `<span class="gb ${w ? "W" : "L"}${grp === "post" ? " post" : ""}" data-go="${L.boxes[g.gid] ? "box:" + g.gid : "schedule"}" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region} · ${w ? "W" : "L"} ${us}–${them}${g.ot ? " (OT)" : ""}`)}">${w ? "W" : "L"}</span>`;
+        out += `<span class="gb ${w ? "W" : "L"}${grp === "post" ? " post" : ""}" data-go="${L.boxes[g.gid] ? "box:" + g.gid : "schedule"}" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region} · ${w ? "W" : "L"} ${us}–${them}${g.ot ? " (OT)" : ""}`)}"><i>${home || g.neutral ? "" : "@"}${esc(T(opp).abbrev)}</i><b>${w ? "W" : "L"} ${us}–${them}${g.ot ? "*" : ""}</b></span>`;
       } else {
-        out += `<span class="gb${g === nextG ? " next" : ""}${grp === "post" ? " post" : ""}" data-go="schedule" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region}${g === nextG ? " · next game" : ""}`)}"></span>`;
+        out += `<span class="gb${g === nextG ? " next" : ""}${grp === "post" ? " post" : ""}" data-go="schedule" title="${esc(`${fmtDay(g.day)} · ${tag}${where} ${T(opp).region}${g === nextG ? " · next game" : ""}`)}"><i>${home || g.neutral ? "" : "@"}${esc(T(opp).abbrev)}</i><b>${fmtDay(g.day)}</b></span>`;
       }
     }
     return `<span class="lab"><b>${r.w}–${r.l}</b> · ${r.cw}–${r.cl} ${esc(C(u).abbrev)}</span>${out}`;
@@ -921,7 +921,7 @@
   }
   function vProgram(tid) {
     const u = L.userTid, t = T(tid), mine = tid === u, c = L.coach, o = progTotals(t);
-    const rows = t.hist.slice().reverse().map((h) => `<tr><td class="l">${seasonLabel(h.season)}</td><td>${h.w}–${h.l}</td><td>${h.cw}–${h.cl}</td><td>${ordinal(h.seed)}</td><td>${h.ct ? "Won" : ""}</td><td class="l">${h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa).replace(/^lost in the /, "Lost in ").replace(/^won the /, "Won the ")}` : "–"}</td><td>${h.prestige}</td></tr>`).join("");
+    const rows = t.hist.slice().reverse().map((h) => `<tr><td class="l"><a data-go="teamyr:${tid}:${h.season}" title="${esc(t.region)} roster, ${seasonLabel(h.season)}">${seasonLabel(h.season)}</a></td><td>${h.w}–${h.l}</td><td>${h.cw}–${h.cl}</td><td>${ordinal(h.seed)}</td><td>${h.ct ? "Won" : ""}</td><td class="l">${h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa).replace(/^lost in the /, "Lost in ").replace(/^won the /, "Won the ")}` : "–"}</td><td>${h.prestige}</td></tr>`).join("");
     const hon = honorsFor(tid);
     const coachCard = mine ? `<div class="card" style="margin-bottom:16px"><div class="cardh"><h3>${esc(coachName())}</h3><span class="mute small">since ${seasonLabel(c.start || L.season)}</span></div><div class="kv"><div>Career<b>${c.w}–${c.l}</b></div><div>Win %<b>${c.w + c.l ? ((c.w / (c.w + c.l)) * 100).toFixed(1) : "–"}</b></div><div>Seasons<b>${c.seasons}</b></div><div>Conf tourney titles<b>${c.ctTitles}</b></div><div>Tournament bids<b>${c.apps}</b></div><div>Final Weekends<b>${c.ff}</b></div><div>National titles<b>${c.titles}</b></div></div></div>` : "";
     const right = mine ? `<button class="btn sm" data-go="records">Program records</button>` : `<button class="btn sm" data-go="team:${tid}">Roster</button><button class="btn sm" data-go="schedule:${tid}">Schedule</button><select id="histSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`;
