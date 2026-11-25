@@ -304,16 +304,53 @@
   // ---------- game sim ----------
   function blankLine() { return { gp: 0, gs: 0, min: 0, pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0 }; }
 
+  // game-outcome tuning (see tests/long.js): FORM_SD is night-to-night shooting luck; Q_A/Q_B reshape team-quality gaps
+  const TUNE = { FORM_SD: 0.01, Q_A: 0.00375, Q_B: 0.006, SLOPE_LO: 2.6, SLOPE_MID: 0.7, SLOPE_HI: 1.9, MID_LO: 52, MID_HI: 63, BAND: 0.0012, BAND_FROM: 4, BAND_CAP: 0.035, CURVE_K: 1.15 };
+  let { FORM_SD, Q_A, Q_B, SLOPE_LO, SLOPE_MID, SLOPE_HI, MID_LO, MID_HI, BAND, BAND_FROM, BAND_CAP, CURVE_K } = TUNE;
+  function tune(o) { Object.assign(TUNE, o); ({ FORM_SD, Q_A, Q_B, SLOPE_LO, SLOPE_MID, SLOPE_HI, MID_LO, MID_HI, BAND, BAND_FROM, BAND_CAP, CURVE_K } = TUNE); }
+  // [national rank out of 365, expected points better than an average team per game]
+  const RANK_CURVE = [[1, 25.8], [4, 23.8], [10, 19], [20, 16.3], [30, 14.3], [50, 11.6], [75, 8.8], [100, 6.8], [150, 2.7], [200, -0.7], [250, -3.4], [300, -6.8], [330, -9.5], [365, -17]];
+  function rankMargin(rs, t) {
+    // fractional rank of quality t among this season's teams (rs sorted best first), scaled to a 365-team sport
+    let lo = 0, hi = rs.length - 1;
+    if (t >= rs[0]) return RANK_CURVE[0][1];
+    if (t <= rs[hi]) return RANK_CURVE[RANK_CURVE.length - 1][1];
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (rs[m] > t) lo = m; else hi = m; }
+    const frac = rs[lo] === rs[hi] ? 0 : (rs[lo] - t) / (rs[lo] - rs[hi]);
+    const rank = (1 + lo + frac) * (365 / rs.length);
+    for (let i = 1; i < RANK_CURVE.length; i++) { const [r1, m1] = RANK_CURVE[i - 1], [r2, m2] = RANK_CURVE[i]; if (rank <= r2) return m1 + ((rank - r1) / (r2 - r1)) * (m2 - m1); }
+    return RANK_CURVE[RANK_CURVE.length - 1][1];
+  }
+  const TQW = [0.15, 0.14, 0.14, 0.13, 0.12, 0.09, 0.08, 0.06, 0.05, 0.04];
+  const tqb = new WeakMap(); // per league, recomputed once a day; never saved
+  function tqBounds(L) {
+    if (!L || !L.teams || !L.players) return null;
+    const c = tqb.get(L); if (c && c.day === L.day && c.season === L.season) return c;
+    const by = new Map(); for (const p of L.players) { if (p.tid < 0) continue; (by.get(p.tid) || by.set(p.tid, []).get(p.tid)).push(p.ovr); }
+    const rs = [];
+    for (const t of L.teams) { const o = (by.get(t.tid) || []).sort((a, b) => b - a).slice(0, 10); let a = 0, b = 0; o.forEach((v, i) => { a += v * TQW[i]; b += TQW[i]; }); rs.push(b ? a / b : 40); }
+    rs.sort((a, b) => b - a);
+    const v = { day: L.day, season: L.season, rs };
+    tqb.set(L, v); return v;
+  }
   function simGame(L, g) {
     const sides = [g.home, g.away].map((tid, si) => {
       const ps = roster(L, tid).filter((p) => !p.inj && !p.rs).slice(0, 12);
       return {
         tid, si, ps, lines: ps.map(() => blankLine()), played: ps.map(() => 0), target: ps.map((_, i) => MINUTES[i] || 0),
-        on: [0, 1, 2, 3, 4], score: 0, halves: [0, 0], tf: 0, form: gauss(0, 0.02),
+        on: [0, 1, 2, 3, 4], score: 0, halves: [0, 0], tf: 0, form: gauss(0, FORM_SD),
         use: ps.map((p) => Math.pow((p.r.ins * 0.3 + p.r.mid * 0.2 + p.r.tp * 0.3 + p.r.hdl * 0.1 + p.r.ath * 0.1) / 50, 3.0)),
       };
     });
     sides.forEach((s) => s.on.forEach((i) => (s.lines[i].gs = 1)));
+    // team-quality shaping: narrows gaps across the middle of the sport, keeps a real edge for elite rosters
+    const TQ = sides.map((s) => { const w = [0.15, 0.14, 0.14, 0.13, 0.12, 0.09, 0.08, 0.06, 0.05, 0.04]; let a = 0, b = 0; s.ps.slice(0, 10).forEach((p, i) => { a += p.ovr * w[i]; b += w[i]; }); return b ? a / b : 40; });
+    // expected margin in points from team quality: steep at the bottom and the very top, flatter across the crowded middle
+    // expected margin follows a team's national rank this season, on a curve shaped like real college basketball
+    // (about +24 per game for a top-5 team, around 0 near 200th, -17 at the very bottom), so balance holds in any era
+    const B = tqBounds(L);
+    const M = (t) => (B ? CURVE_K * rankMargin(B.rs, t) : SLOPE_LO * Math.min(t, MID_LO) + SLOPE_MID * clamp(t - MID_LO, 0, MID_HI - MID_LO) + SLOPE_HI * Math.max(0, t - MID_HI));
+    sides.forEach((s, i) => (s.q = clamp(Q_A * (M(TQ[i]) - M(TQ[1 - i])) - Q_B * (TQ[i] - TQ[1 - i]), -0.12, 0.12)));
     const neutral = g.neutral;
     // pace: each program has its own tempo; the game lands between the two
     const N = Math.round(clamp(68 + ((L.teams[g.home].pace || 0) + (L.teams[g.away].pace || 0)) / 2 + gauss(0, 2), 56, 82));
@@ -381,7 +418,10 @@
       for (let k = 0; k < poss * 2; k++) {
         if (clock >= nextSub) { sides.forEach((s) => pickLineup(s, startT + clock, totalTime)); nextSub += 2; }
         const off = sides[k % 2], def = sides[1 - (k % 2)];
-        const pts = possession(off, def, off.form - def.form * 0.5 + (neutral ? 0 : off.si === 0 ? 0.015 : -0.005));
+        // big leads shrink a little: the trailing team presses, the leader eases off and plays its bench
+        const lead = off.score - def.score, over = Math.sign(lead) * Math.max(0, Math.abs(lead) - BAND_FROM);
+        const band = clamp(-BAND * over, -BAND_CAP, BAND_CAP);
+        const pts = possession(off, def, off.form - def.form * 0.5 + off.q + band + (neutral ? 0 : off.si === 0 ? 0.015 : -0.005));
         off.score += pts; off.halves[half] = (off.halves[half] || 0) + pts;
         for (const s of sides) for (const i of s.on) { s.played[i] += d; s.lines[i].min += d; }
         clock += d;
@@ -1072,14 +1112,14 @@
     // record holders stay clickable too: national record book and every program's own records
     const rbk = L.rb || {};
     for (const grp of [rbk.game, rbk.season, rbk.career]) for (const k in grp || {}) for (const x of grp[k] || []) if (x && x.pid != null) honored.add(x.pid);
-    for (const t of L.teams) for (const k in t.best || {}) { const x = t.best[k]; if (x && x.pid != null && (k.startsWith("s_") || k.startsWith("c_"))) honored.add(x.pid); } // program season and career records
     if (!L.past) { L.past = {}; L.pastSince = L.history.length ? L.season : 0; } // seasons before pastSince may miss role players who left earlier
     const past = L.past;
     for (const p of L.players) {
       if (!p.leave) continue;
       if (!(p.pro || p.tid === L.userTid || honored.has(p.pid))) {
-        // everyone else keeps a slim line per season so past rosters stay complete: [team, games, minutes, points, rebounds, assists]
-        const s = {}; for (const y in p.stats) { const x = p.stats[y]; if (x) s[y] = [x.tid, x.gp, x.min, x.pts, x.orb + x.drb, x.ast]; }
+        // everyone else keeps a slim line per season (past rosters, record book, a basic player page):
+        // [team, games, minutes, points, rebounds, assists, steals, blocks, threes made]
+        const s = {}; for (const y in p.stats) { const x = p.stats[y]; if (x) s[y] = [x.tid, x.gp, Math.round(x.min), x.pts, x.orb + x.drb, x.ast, x.stl, x.blk, x.tpm]; }
         past[p.pid] = [p.first + " " + p.last, p.pos, s, p.yr, L.season]; // class and season when he left, to work out his class in earlier years
         continue;
       }
@@ -1516,7 +1556,7 @@
     return o;
   }
 
-  const api = { classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
+  const api = { tune, classRankings, openPortal, portalKeep, portalOffer, portalBoard, portalOpenings, resolvePortal, canRedshirt, setRedshirt, classLabel, careerTotals, GSTATS, SSTATS, CSTATS, PRO_TEAMS, hpi, predict, renameTerms, distance, nearBoost, ensureGeo, placeSchools,
     RKEYS, RNAMES, POS, YR, MINUTES, DAYS, NCAA_ROUNDS, REGIONS, STAR_OVR,
     newWorld, claimSchool, newLeague, simGame, applyBox, playDay, playOneGame, gamesLeftToday, stageMatches, playNextUserGame, playDays, playWeek, playUntil, playToEnd, startNextSeason,
     confStandings, roster, autoDepth, calcOvr, teamRating, power, netRanks, updatePoll, selectField, expectations, blankLine, dayDate, dayOffset,

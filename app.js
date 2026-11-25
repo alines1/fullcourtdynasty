@@ -203,6 +203,7 @@
       <div class="s8">${leaders}</div><div class="s4">${top25 || recr}</div>
       ${top25 ? `<div class="s4">${recr}</div><div class="s8">${newsC}</div>` : `<div class="s12">${newsC}</div>`}</div>`;
   }
+  const confLink = (tid) => `<a data-act="cstand:${T(tid).cid}" title="${esc(C(tid).name)} standings">${esc(C(tid).name)}</a>`;
   function teamHead(tid, title, sub, right) {
     const t = T(tid);
     return `<div class="phead th" style="--tc2:${col(t.c1)}"><div class="who">${logo(t, 56)}<div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div></div>${right ? `<div class="tools" style="margin:0">${right}</div>` : ""}</div>`;
@@ -231,7 +232,7 @@
     const extra = [["gp", "GP"], ["min", "MPG"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]].map(([k, h]) => ({ k, h, v: (p) => statVal(curStats(p), k), f: (p) => (k === "gp" ? curStats(p)?.gp || 0 : f1(statVal(curStats(p), k))) }))
         .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s && s[a] ? s[m] / s[a] : -1; }, f: (p) => { const s = curStats(p); return s ? pct(s[m], s[a]) : "–"; } })));
     const inc = L.recruits.filter((r) => r.commit === tid).sort((a, b) => a.rank - b.rank);
-    return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${t.city ? esc(t.city) + " · " : ""}${esc(C(tid).name)} · ${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
+    return teamHead(tid, `${rkTag(tid)}${esc(full(t))}`, `${confLink(tid)} · ${t.city ? esc(t.city) + " · " : ""}${recStr(tid)} · NET ${NET[tid]} · team rating ${E.teamRating(L, tid)} · prestige ${t.prestige}`, `<select id="teamSel" class="btn" aria-label="Team">${teamOptions(tid)}</select>`) + `
       <div class="tools">${t.hist.length ? seasonOptions(tid, L.season) : ""}<button class="btn sm" data-act="editteam:${tid}">Edit name &amp; colors</button>${mine ? `<button class="btn sm" data-act="autosort">Auto-sort by overall</button>${sorted ? `<button class="btn sm" data-act="unsort">Back to rotation order</button>` : ""}<span class="mute small">Top 5 start. Rotation order sets minutes.</span>` : `<button class="btn sm" data-go="schedule:${tid}">Schedule</button><button class="btn sm" data-go="progh:${tid}">History</button>`}</div>
       ${table(id, base.concat(extra), ps, { rc: (p) => (p.depth < 5 ? "start" : "") + (p.depth === 4 ? " split" : "") })}
       ${inc.length ? `<h3 style="margin-top:18px">Committed for next season</h3><p>${inc.map((r) => `${stars(r.stars)} ${esc(r.first + " " + r.last)} <span class="mute">${r.pos} · No. ${r.rank}</span>`).join(" &nbsp; ")}</p>` : ""}
@@ -261,6 +262,8 @@
       ${awardPills(p.awards)}
       <div class="kpis">${kpi("Overall", `${p.ovr}${dOvr(p)}`, p.dOvr ? "change since last season" : "current rating")}${kpi("Potential", p.pot, "rough ceiling")}${kpi("Points", cur && cur.gp ? f1(cur.pts / cur.gp) : "–", "per game")}${kpi("Rebounds", cur && cur.gp ? f1((cur.orb + cur.drb) / cur.gp) : "–", "per game")}${kpi("Assists", cur && cur.gp ? f1(cur.ast / cur.gp) : "–", "per game")}${kpi("Games", cur ? cur.gp : 0, cur ? `${cur.gs} starts` : "this season")}</div>
       <div class="dash"><div class="s8 stackcol"><div class="card"><h3>Season by season</h3>${seasons.length ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>GS</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG%</th><th>3P%</th><th>FT%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div>` : `<p class="mute">Hasn't played yet.</p>`}</div>
+      ${advTable(p.stats).replace('style="margin-top:16px"', "")}
+      ${playerRecords(p.pid).replace('style="margin-top:16px"', "")}
       <div class="card"><h3>Game log</h3>${logT}</div></div>
       <div class="s4 stackcol"><div class="card"><h3>Profile</h3>${prof}</div><div class="card"><h3>Ratings</h3><div class="bars">${bars}</div></div></div></div>`;
   }
@@ -268,7 +271,7 @@
   // former players kept in the archive (pros, award winners and your own program's players)
   function vAlumnus(pid) {
     const a = (L.alumni || {})[pid];
-    if (!a) return phead("Former player", "This player has left college. Records are kept for drafted players, award winners and players from your program.");
+    if (!a) return vPastPlayer(pid) || phead("Former player", "This player left college before full records were kept.");
     const seasons = Object.keys(a.stats).map(Number).sort();
     const c = E.careerTotals(a), gp = c.gp || 1;
     const srow = (y) => { const s = a.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l"><a data-go="teamyr:${s.tid}:${y}" title="${esc(T(s.tid).region)} roster, ${seasonLabel(y)}">${esc(L.teams[s.tid]?.abbrev || "")}</a></td><td>${s.gp}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / (s.gp || 1))}</td><td>${f1(pg(s, "ast"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td></tr>`; };
@@ -276,9 +279,10 @@
     return teamHead(a.tid, esc(a.first + " " + a.last), `${a.pos} · ${esc(a.school)} · left ${seasonLabel(a.left)} (${a.how === "early" ? "early entry" : "graduated"})`, `<button class="btn sm" data-go="progh:${a.tid}">${esc(T(a.tid).abbrev)} history</button>`) + `
       ${awardPills(a.awards)}
       <div class="kpis">${kpi("After college", a.pro ? "Pick " + a.pro.pick : "Undrafted", a.pro ? esc(a.pro.team) : "")}${kpi("Career points", num(c.pts), f1(c.pts / gp) + " per game")}${kpi("Rebounds", num(c.reb), f1(c.reb / gp) + " per game")}${kpi("Assists", num(c.ast), f1(c.ast / gp) + " per game")}${kpi("Games", num(c.gp), c.seasons + " seasons")}${kpi("Final rating", a.ovr, "potential " + a.pot)}</div>
-      <div class="card"><h3>College career</h3><p class="mute small">${pro}. From ${esc(a.town)}${a.stars ? " · " + a.stars + "★ recruit" : ""}.</p><div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>FG%</th><th>3P%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div></div>`;
+      ${playerRecords(a.pid)}
+      <div class="card"><h3>College career</h3><p class="mute small">${pro}. From ${esc(a.town)}${a.stars ? " · " + a.stars + "★ recruit" : ""}.</p><div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>FG%</th><th>3P%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div></div>${advTable(a.stats)}`;
   }
-  const playerLink = (x) => { if (!x) return "–"; const live = L.players.some((p) => p.pid === x.pid) || (L.alumni && L.alumni[x.pid]); return live ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name); };
+  const playerLink = (x) => { if (!x) return "–"; const live = L.players.some((p) => p.pid === x.pid) || (L.alumni && L.alumni[x.pid]) || (L.past && L.past[x.pid]); return live ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name); };
 
   // award pills: repeats grouped ("2x National Player of the Year"), national player of the year in gold
   const GOLD = new Set(["National Player of the Year", "National Champion"]);
@@ -288,6 +292,44 @@
     const by = new Map(); for (const x of list) { if (!by.has(x.a)) by.set(x.a, []); by.get(x.a).push(x.s); }
     const items = [...by.entries()].sort((x, y) => AW_ORDER(x[0]) - AW_ORDER(y[0]) || y[1].length - x[1].length || x[1][0] - y[1][0]);
     return `<div class="awards">${items.map(([n, ss]) => `<span class="pill aw${GOLD.has(n) ? " gold" : ""}" title="${esc(ss.map(seasonLabel).join(", "))}">${ss.length > 1 ? `${ss.length}x ${esc(n)}` : `${seasonLabel(ss[0])} ${esc(n)}`}</span>`).join("")}</div>`;
+  }
+  // records a player holds: national record book and any program's own records
+  function playerRecords(pid) {
+    const out = [], R0 = L.rb || {};
+    const lab = (list, k) => (list.find((x) => x[0] === k) || [k, k])[1];
+    for (const [k] of E.GSTATS) (R0.game?.[k] || []).forEach((e, i) => { if (e.pid === pid) out.push({ sort: i, txt: `${i === 0 ? "<b>National record</b>" : `No. ${i + 1} all-time`}: ${lab(E.GSTATS, k).toLowerCase()} in a game, <b>${num(e.v)}</b> vs. ${esc(e.opp)} (${seasonLabel(e.season)})` }); });
+    for (const [k] of E.SSTATS) (R0.season?.[k] || []).forEach((e, i) => { if (e.pid === pid) out.push({ sort: i, txt: `${i === 0 ? "<b>National record</b>" : `No. ${i + 1} all-time`}: ${lab(E.SSTATS, k).toLowerCase()} in a season, <b>${Number.isInteger(e.v) ? num(e.v) : e.v.toFixed(1)}</b> (${seasonLabel(e.season)})` }); });
+    for (const [k] of E.CSTATS) (R0.career?.[k] || []).forEach((e, i) => { if (e.pid === pid) out.push({ sort: i, txt: `${i === 0 ? "<b>National record</b>" : `No. ${i + 1} all-time`}: career ${lab(E.CSTATS, k).toLowerCase()}, <b>${num(e.v)}</b>` }); });
+    const PL = { g_pts: "points in a game", g_reb: "rebounds in a game", g_ast: "assists in a game", g_stl: "steals in a game", g_blk: "blocks in a game", g_tpm: "threes in a game", s_ppg: "points per game, season", s_rpg: "rebounds per game, season", s_apg: "assists per game, season", s_spg: "steals per game, season", s_bpg: "blocks per game, season", s_pts: "points in a season", s_tpm: "threes in a season", c_pts: "career points", c_reb: "career rebounds", c_ast: "career assists", c_stl: "career steals", c_blk: "career blocks", c_tpm: "career threes", c_gp: "career games" };
+    const prog = [];
+    for (const t of L.teams) { const mine = []; for (const k in t.best || {}) { const e = t.best[k]; if (e && e.pid === pid && PL[k]) mine.push(`${PL[k]}, <b>${Number.isInteger(e.v) ? num(e.v) : e.v.toFixed(1)}</b>${e.opp ? ` vs. ${esc(e.opp)}` : ""}${e.season ? ` (${seasonLabel(e.season)})` : ""}`); } if (mine.length) prog.push({ t, mine }); }
+    if (!out.length && !prog.length) return "";
+    out.sort((x, y) => x.sort - y.sort);
+    const nat = out.length ? `<ul class="reclist">${out.map((x) => `<li>${x.txt}</li>`).join("")}</ul>` : "";
+    const pr = prog.map(({ t, mine }) => `<details class="small" style="margin-top:6px"><summary style="cursor:pointer"><b>${esc(t.region)} program records</b> · ${mine.length}</summary><ul class="reclist">${mine.map((x) => `<li>${x}</li>`).join("")}</ul></details>`).join("");
+    return `<div class="card" style="margin-top:16px"><div class="cardh"><h3>Records</h3><span class="mute small">${out.filter((x) => x.sort === 0).length ? `${out.filter((x) => x.sort === 0).length} national record${out.filter((x) => x.sort === 0).length > 1 ? "s" : ""}` : ""}</span></div>${nat}${pr}</div>`;
+  }
+  // advanced stats, one row per season (full stat lines only)
+  function advTable(stats) {
+    const ys = Object.keys(stats || {}).map(Number).sort().filter((y) => stats[y] && stats[y].gp);
+    if (!ys.length) return "";
+    const p40 = (s, v) => (s.min ? f1((v / s.min) * 40) : "–"), pc = (x) => (isFinite(x) ? (x * 100).toFixed(1) : "–");
+    const row = (y) => { const s = stats[y], reb = s.orb + s.drb, tsa = s.fga + 0.44 * s.fta, gs = s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
+      return `<tr><td class="l">${seasonLabel(y)}</td><td class="l"><a data-go="teamyr:${s.tid}:${y}">${esc(T(s.tid).abbrev)}</a></td><td>${pc(tsa ? s.pts / (2 * tsa) : NaN)}</td><td>${pc(s.fga ? (s.fgm + 0.5 * s.tpm) / s.fga : NaN)}</td><td>${pc(s.fga ? s.tpa / s.fga : NaN)}</td><td>${pc(s.fga ? s.fta / s.fga : NaN)}</td><td>${s.tov ? (s.ast / s.tov).toFixed(2) : "–"}</td><td>${p40(s, s.pts)}</td><td>${p40(s, reb)}</td><td>${p40(s, s.ast)}</td><td>${p40(s, s.stl)}</td><td>${p40(s, s.blk)}</td><td>${f1(gs / s.gp)}</td></tr>`; };
+    return `<div class="card" style="margin-top:16px"><h3>Advanced</h3><div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th title="True shooting: points per shooting attempt, counting free throws">TS%</th><th title="Effective field goal %: threes count 1.5x">eFG%</th><th title="Share of shots that are threes">3PA rate</th><th title="Free throw attempts per shot">FT rate</th><th title="Assists per turnover">AST/TO</th><th>PTS/40</th><th>REB/40</th><th>AST/40</th><th>STL/40</th><th>BLK/40</th><th title="Average game score: one number for a player's box score">GmSc</th></tr></thead><tbody>${ys.map(row).join("")}</tbody></table></div><p class="mute small">Per-40 numbers scale production to 40 minutes. Hover a column name for what it means.</p></div>`;
+  }
+  // basic page for former players kept in the slim archive
+  function vPastPlayer(pid) {
+    const x = (L.past || {})[pid]; if (!x) return null;
+    const [name, pos, st, yrLeft, left] = x, ys = Object.keys(st).map(Number).sort();
+    const last = st[ys[ys.length - 1]], tid = last[0], c = { gp: 0, min: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
+    for (const y of ys) { const s = st[y]; c.gp += s[1] || 0; c.min += s[2] || 0; c.pts += s[3] || 0; c.reb += s[4] || 0; c.ast += s[5] || 0; c.stl += s[6] || 0; c.blk += s[7] || 0; c.tpm += s[8] || 0; }
+    const pgv = (v, g) => (g ? f1(v / g) : "–"), full6 = st[ys[0]].length > 6;
+    const rows = ys.map((y) => { const s = st[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l"><a data-go="teamyr:${s[0]}:${y}">${esc(T(s[0]).abbrev)}</a></td><td>${s[1]}</td><td>${pgv(s[2], s[1])}</td><td>${pgv(s[3], s[1])}</td><td>${pgv(s[4], s[1])}</td><td>${pgv(s[5], s[1])}</td>${full6 ? `<td>${pgv(s[6], s[1])}</td><td>${pgv(s[7], s[1])}</td><td>${pgv(s[8], s[1])}</td>` : ""}</tr>`; }).join("");
+    return teamHead(tid, esc(name), `${pos} · ${confLink(tid)} · left ${seasonLabel(left)}`, `<button class="btn sm" data-go="progh:${tid}">${esc(T(tid).abbrev)} history</button>`) + `
+      <div class="kpis">${kpi("Career points", num(c.pts), pgv(c.pts, c.gp) + " per game")}${kpi("Rebounds", num(c.reb), pgv(c.reb, c.gp) + " per game")}${kpi("Assists", num(c.ast), pgv(c.ast, c.gp) + " per game")}${kpi("Games", num(c.gp), ys.length + " seasons")}</div>
+      <div class="card"><h3>College career</h3><div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th>${full6 ? "<th>STL</th><th>BLK</th><th>3PM</th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">A summary record is kept for every former player. Full stat lines and ratings are kept for drafted players, award winners, national record holders and your own players.</p></div>
+      ${playerRecords(pid)}`;
   }
   // ---------- a team's roster in a past season ----------
   function seasonOptions(tid, sel) {
@@ -305,7 +347,7 @@
     for (const k in L.past || {}) {
       const [name, pos, st, yrLeft, left] = L.past[k], s = st[y]; if (!s || s[0] !== tid || seen.has(+k)) continue;
       seen.add(+k); const ys = Object.keys(st).map(Number).sort();
-      rows.push({ pid: +k, name, pos, cls: cls(yrLeft, left, ys), gp: s[1], min: s[2], pts: s[3], reb: s[4], ast: s[5], link: false });
+      rows.push({ pid: +k, name, pos, cls: cls(yrLeft, left, ys), gp: s[1], min: s[2], pts: s[3], reb: s[4], ast: s[5], link: true });
     }
     const per = (r, k) => (r.gp ? r[k] / r.gp : 0);
     const cols = [
@@ -315,8 +357,12 @@
       { k: "ppg", h: "PTS", v: (r) => per(r, "pts"), f: (r) => f1(per(r, "pts")) }, { k: "rpg", h: "REB", v: (r) => per(r, "reb"), f: (r) => f1(per(r, "reb")) }, { k: "apg", h: "AST", v: (r) => per(r, "ast"), f: (r) => f1(per(r, "ast")) },
       { k: "fg", h: "FG%", v: (r) => (r.fga ? r.fgm / r.fga : -1), f: (r) => (r.fga ? pct(r.fgm, r.fga) : "–") }, { k: "tp", h: "3P%", v: (r) => (r.tpa ? r.tpm / r.tpa : -1), f: (r) => (r.tpa ? pct(r.tpm, r.tpa) : "–") },
     ];
-    const sub = h ? `${h.w}–${h.l} · ${h.cw}–${h.cl} ${esc(C(tid).abbrev)} (${ordinal(h.seed)})${h.ct ? " · conference tournament champions" : ""} · ${h.ncaa >= 0 ? `${h.nseed} seed, ${ncaaResult(h.ncaa)}` : "no National Tournament bid"}` : "";
-    return teamHead(tid, `${esc(full(t))}`, `${seasonLabel(y)} roster${sub ? " · " + sub : ""}`, `${seasonOptions(tid, y)}<button class="btn sm" data-go="team:${tid}">Current roster</button>`) + `
+    const champ = L.history.find((x) => x.season === y), wonAll = champ && champ.champ === tid, ff = champ && champ.ff.includes(tid);
+    const ys = t.hist.map((x) => x.season), i = ys.indexOf(y), prev = i > 0 ? ys[i - 1] : null, next = i >= 0 && i < ys.length - 1 ? ys[i + 1] : y < L.season ? L.season : null;
+    const nav = `${prev ? `<button class="btn sm" data-go="teamyr:${tid}:${prev}">◀ ${seasonLabel(prev)}</button>` : ""}${seasonOptions(tid, y)}${next ? `<button class="btn sm" data-go="teamyr:${tid}:${next}">${seasonLabel(next)} ▶</button>` : ""}<button class="btn sm" data-go="team:${tid}">Current roster</button>`;
+    const post = !h ? "–" : h.ncaa >= 0 ? `${h.nseed} seed · ${ncaaResult(h.ncaa)}` : "No bid";
+    const banner = h ? `<div class="kpis">${kpi("Record", `${h.w}–${h.l}`, `${h.w + h.l ? Math.round((100 * h.w) / (h.w + h.l)) : 0}% wins`)}${kpi("Conference", `${h.cw}–${h.cl}`, `${ordinal(h.seed)} in the ${esc(C(tid).abbrev)}`)}${kpi("Conf. tournament", h.ct ? "Champions" : "–", h.ct ? "automatic bid" : "")}${kpi("National Tournament", wonAll ? "Champions" : h.ncaa >= 0 ? `${h.nseed} seed` : "No bid", wonAll ? `${h.nseed} seed` : h.ncaa >= 0 ? ncaaResult(h.ncaa) : "")}${kpi("Prestige", h.prestige ?? "–", "after the season")}</div>` : `<p class="mute">Season in progress or not on file.</p>`;
+    return teamHead(tid, `${seasonLabel(y)} ${esc(full(t))}`, `${confLink(tid)} · ${wonAll ? "<b>National champions</b> · " : ff ? "Final Weekend · " : ""}season archive`, nav) + banner + `
       ${rows.length ? table("tyr", cols, rows, { def: { k: "mpg", d: -1 } }) : `<p class="mute">No roster on file for this season.</p>`}
       <p class="mute small">Stats are per game for ${seasonLabel(y)}. Class is the player's year in the program that season. ${L.pastSince && y < L.pastSince ? "Some role players who left before rosters were archived may be missing." : ""}</p>`;
   }
@@ -527,7 +573,13 @@
   function bookPeople() {
     const seen = new Set(), out = [];
     for (const p of L.players) { seen.add(p.pid); out.push({ pid: p.pid, name: p.first + " " + p.last, stats: p.stats, active: true }); }
-    for (const k in L.alumni || {}) { const a = L.alumni[k]; if (!seen.has(a.pid)) out.push({ pid: a.pid, name: a.first + " " + a.last, stats: a.stats, active: false }); }
+    for (const k in L.alumni || {}) { const a = L.alumni[k]; if (!seen.has(a.pid)) { seen.add(a.pid); out.push({ pid: a.pid, name: a.first + " " + a.last, stats: a.stats, active: false }); } }
+    // everyone else from the slim archive (no turnovers or shooting splits)
+    for (const k in L.past || {}) {
+      if (seen.has(+k)) continue; const [name, , st] = L.past[k], stats = {};
+      for (const y in st) { const s = st[y]; stats[y] = { tid: s[0], gp: s[1] || 0, min: s[2] || 0, pts: s[3] || 0, orb: 0, drb: s[4] || 0, ast: s[5] || 0, stl: s[6] || 0, blk: s[7] || 0, tpm: s[8] || 0, slim: true }; }
+      out.push({ pid: +k, name, stats, active: false, slim: true });
+    }
     return out;
   }
   const addLine = (t, s) => { for (const k of ["gp", "min", "pts", "ast", "stl", "blk", "tov", "tpm", "tpa", "fgm", "fga", "ftm", "fta"]) t[k] = (t[k] || 0) + (s[k] || 0); t.reb = (t.reb || 0) + (s.orb || 0) + (s.drb || 0); return t; };
@@ -548,13 +600,13 @@
       for (const x of bookPeople()) {
         const ys = Object.keys(x.stats || {}).map(Number).sort();
         if (B.view === "season") {
-          for (const y of ys) { const s = x.stats[y]; if (!s || !s.gp || !inScope(s.tid)) continue; const t = addLine({}, s); if (pg && t.gp < minGp) continue; rows.push(Object.assign(t, { pid: x.pid, name: x.name, tid: s.tid, season: y, active: x.active })); }
+          for (const y of ys) { const s = x.stats[y]; if (!s || !s.gp || !inScope(s.tid)) continue; const t = addLine({}, s); if (pg && t.gp < minGp) continue; rows.push(Object.assign(t, { pid: x.pid, name: x.name, tid: s.tid, season: y, active: x.active, slim: !!s.slim })); }
         } else {
           if (!ys.length || !ys.some((y) => x.stats[y] && inScope(x.stats[y].tid))) continue;
           const t = {}; for (const y of ys) if (x.stats[y]) addLine(t, x.stats[y]);
           if (!t.gp || (pg && t.gp < minGp)) continue;
           const last = x.stats[ys[ys.length - 1]];
-          rows.push(Object.assign(t, { pid: x.pid, name: x.name, tid: last.tid, season: ys[0], last: ys[ys.length - 1], yrs: ys.length, active: x.active }));
+          rows.push(Object.assign(t, { pid: x.pid, name: x.name, tid: last.tid, season: ys[0], last: ys[ys.length - 1], yrs: ys.length, active: x.active, slim: !!x.slim }));
         }
       }
       const val = (r, k) => (pg && k !== "gp" ? r[k] / r.gp : r[k]);
@@ -562,10 +614,10 @@
         { k: "name", h: "Player", l: 1, v: (r) => r.name, f: (r) => playerLink({ pid: r.pid, name: r.name }) + (r.active && B.view === "career" ? ` <span class="pill">active</span>` : "") },
         { k: "team", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid, { rank: false }) },
         B.view === "season" ? { k: "season", h: "Season", l: 1, f: (r) => seasonLabel(r.season) + (r.season === L.season && L.phase !== "offseason" ? ` <span class="mute">(now)</span>` : "") } : { k: "season", h: "Years", l: 1, f: (r) => (r.yrs > 1 ? `${r.season}–${String(r.last + 1).slice(2)}` : seasonLabel(r.season)) },
-      ].concat(BK_STATS.map(([k, h]) => ({ k, h, v: (r) => val(r, k), f: (r) => (k === "gp" || !pg ? num(val(r, k)) : f1(val(r, k))) })))
+      ].concat(BK_STATS.map(([k, h]) => ({ k, h, v: (r) => (r.slim && k === "tov" ? -1 : val(r, k)), f: (r) => (r.slim && k === "tov" ? "–" : k === "gp" || !pg ? num(val(r, k)) : f1(val(r, k))) })))
        .concat(PCT.map(([k, h, m, att]) => ({ k, h, v: (r) => (r[att] ? r[m] / r[att] : -1), f: (r) => (r[att] ? ((r[m] / r[att]) * 100).toFixed(1) : "–") })));
       def = { k: "pts", d: -1 };
-      note = `${pg ? `Per-game lists need ${minGp}+ games. ` : ""}Includes every player now in college, every former player from your program, and former players who were drafted, won an award or hold a record.`;
+      note = `${pg ? `Per-game lists need ${minGp}+ games. ` : ""}Includes every current and former player. Turnovers and shooting splits show "–" for former players kept in summary form.`;
     } else if (B.view === "game") {
       const R0 = (L.rb && L.rb.game) || {};
       rows = [];
@@ -916,7 +968,7 @@
     return phead("Program records", seasons ? `Totals across the ${seasons} completed season${seasons === 1 ? "" : "s"} in this league · click a column to sort` : "Fills in as seasons are completed", opts) +
       (seasons ? table("records", cols, sorted, { def, presorted: true, rc: (r) => (r.tid === L.userTid ? "me" : "") }) : `<div class="card"><p class="mute">Finish your first season to start the record book.</p></div>`);
   }
-  function awardCell(x, extra) { if (!x) return `<td class="l mute">–</td>`; const alive = L.players.some((p) => p.pid === x.pid) || !!(L.alumni && L.alumni[x.pid]); return `<td class="l">${alive ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)} · ${x.pos} · ${E.YR[x.yr] || ""}</span><div class="small mute">${extra || `${x.ppg} ppg · ${x.rpg} rpg · ${x.apg} apg`}</div></td>`; }
+  function awardCell(x, extra) { if (!x) return `<td class="l mute">–</td>`; const alive = L.players.some((p) => p.pid === x.pid) || !!(L.alumni && L.alumni[x.pid]) || !!(L.past && L.past[x.pid]); return `<td class="l">${alive ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)} · ${x.pos} · ${E.YR[x.yr] || ""}</span><div class="small mute">${extra || `${x.ppg} ppg · ${x.rpg} rpg · ${x.apg} apg`}</div></td>`; }
   function vConfAwards() {
     const cid = S.cid ?? T(L.userTid).cid, c = L.confs[cid], A = L.awards || {};
     const seasons = Object.keys(A).map(Number).sort((x, y) => y - x);
@@ -1051,6 +1103,7 @@
     else if (k === "newseason") { E.startNextSeason(L); S.view = "home"; projCache = null; render(); persist(); showRecap(); }
     else if (k === "rmode") { S.rmode = v; render(); }
     else if (k === "go") { go(v); }
+    else if (k === "cstand") { S.cid = +v; go("standings"); }
     else if (k === "ctgo") { S.cid = +v; go("ctour"); }
     else if (k === "tour") { if (v === "end") { L.tourDone = true; closeModal(); persist(); } else tour(+v); }
     else if (k === "savefile") saveFile();
