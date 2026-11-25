@@ -969,23 +969,26 @@
       (seasons ? table("records", cols, sorted, { def, presorted: true, rc: (r) => (r.tid === L.userTid ? "me" : "") }) : `<div class="card"><p class="mute">Finish your first season to start the record book.</p></div>`);
   }
   function awardCell(x, extra) { if (!x) return `<td class="l mute">–</td>`; const alive = L.players.some((p) => p.pid === x.pid) || !!(L.alumni && L.alumni[x.pid]) || !!(L.past && L.past[x.pid]); return `<td class="l">${alive ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name)} <span class="mute">${esc(x.abbrev)} · ${x.pos} · ${E.YR[x.yr] || ""}</span><div class="small mute">${extra || `${x.ppg} ppg · ${x.rpg} rpg · ${x.apg} apg`}</div></td>`; }
+  // season label that opens that year's season summary
+  const seasonGo = (y) => (L.history.some((h) => h.season === y) ? `<a data-act="sumgo:${y}">${seasonLabel(y)}</a>` : seasonLabel(y));
   function vConfAwards() {
     const cid = S.cid ?? T(L.userTid).cid, c = L.confs[cid], A = L.awards || {};
-    const seasons = Object.keys(A).map(Number).sort((x, y) => y - x);
-    const aw = seasons.filter((s) => A[s].conf && A[s].conf[cid]).map((s) => `<tr><td class="l">${seasonLabel(s)}</td>${awardCell(A[s].conf[cid].poy)}${awardCell(A[s].conf[cid].foy)}</tr>`).join("");
-    const ch = L.history.slice().reverse().map((h) => `<tr><td class="l">${seasonLabel(h.season)}</td><td class="l">${h.regChamps && h.regChamps[cid] != null ? tlink(h.regChamps[cid], { rank: false }) : "–"}</td><td class="l">${h.confChamps && h.confChamps[cid] != null ? tlink(h.confChamps[cid], { rank: false }) : "–"}</td></tr>`).join("");
+    const ys = new Set(L.history.map((h) => h.season)); for (const s in A) if (A[s].conf && A[s].conf[cid]) ys.add(+s);
+    const H = new Map(L.history.map((h) => [h.season, h]));
+    const rows = [...ys].sort((x, y) => y - x).map((y) => { const h = H.get(y), aw = A[y] && A[y].conf ? A[y].conf[cid] : null;
+      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h && h.regChamps && h.regChamps[cid] != null ? tlink(h.regChamps[cid], { rank: false }) : "–"}</td><td class="l">${h && h.confChamps && h.confChamps[cid] != null ? tlink(h.confChamps[cid], { rank: false }) : "–"}</td>${awardCell(aw && aw.poy)}${awardCell(aw && aw.foy)}</tr>`; }).join("");
     return phead(`${esc(c.abbrev)} awards & champions`, esc(c.name), confSel(cid)) + `
-      <div class="card" style="margin-bottom:16px"><h3>Player and Freshman of the Year</h3>${aw ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th></tr></thead><tbody>${aw}</tbody></table></div>` : `<p class="mute">Announced when the regular season ends.</p>`}</div>
-      <div class="card"><h3>Champions</h3>${ch ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Regular season</th><th class="l">Tournament (auto bid)</th></tr></thead><tbody>${ch}</tbody></table></div>` : `<p class="mute">Filled in after each season.</p>`}</div>`;
+      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Regular season champion</th><th class="l">Tournament champion</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
   }
   function vNatAwards() {
-    const A = L.awards || {}, seasons = Object.keys(A).map(Number).sort((x, y) => y - x);
-    const nat = seasons.filter((s) => A[s].poy || A[s].mop).map((s) => `<tr><td class="l">${seasonLabel(s)}</td>${awardCell(A[s].poy)}${awardCell(A[s].foy)}${awardCell(A[s].mop, A[s].mop ? `${A[s].mop.tppg} ppg · ${A[s].mop.trpg} rpg in ${A[s].mop.tg} tournament games` : "")}</tr>`).join("");
-    const champs = L.history.slice().reverse().map((h) => `<tr><td class="l">${seasonLabel(h.season)}</td><td class="l"><b>${tlink(h.champ, { rank: false })}</b></td><td class="l">${tlink(h.runner, { rank: false })}</td><td class="l">${h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ")}</td></tr>`).join("");
+    const A = L.awards || {}, H = new Map(L.history.map((h) => [h.season, h]));
+    const ys = new Set(L.history.map((h) => h.season)); for (const s in A) if (A[s].poy || A[s].mop) ys.add(+s);
+    const rows = [...ys].sort((x, y) => y - x).map((y) => { const h = H.get(y), a = A[y] || {};
+      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h ? `<b>${tlink(h.champ, { rank: false })}</b><div class="small mute">over ${esc(T(h.runner).region)}</div>` : "–"}</td><td class="l small">${h ? h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ") : "–"}</td>${awardCell(a.poy)}${awardCell(a.foy)}${awardCell(a.mop, a.mop ? `${a.mop.tppg} ppg · ${a.mop.trpg} rpg in ${a.mop.tg} tournament games` : "")}</tr>`; }).join("");
     return phead("National awards & champions", "National") + `
-      <div class="card" style="margin-bottom:16px"><h3>National awards</h3>${nat ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament Most Outstanding Player</th></tr></thead><tbody>${nat}</tbody></table></div>` : `<p class="mute">Announced after the national championship game.</p>`}</div>
-      <div class="card"><h3>National champions</h3>${champs ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Champion</th><th class="l">Runner-up</th><th class="l">Final Weekend</th></tr></thead><tbody>${champs}</tbody></table></div>` : `<p class="mute">None yet.</p>`}</div>`;
+      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">National champion</th><th class="l">Other Final Weekend teams</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament MOP</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
   }
+
 
   // ---------- save / new ----------
   function vLeague() {
@@ -1103,6 +1106,7 @@
     else if (k === "newseason") { E.startNextSeason(L); S.view = "home"; projCache = null; render(); persist(); showRecap(); }
     else if (k === "rmode") { S.rmode = v; render(); }
     else if (k === "go") { go(v); }
+    else if (k === "sumgo") { S.sumSeason = +v; go("summary"); }
     else if (k === "cstand") { S.cid = +v; go("standings"); }
     else if (k === "ctgo") { S.cid = +v; go("ctour"); }
     else if (k === "tour") { if (v === "end") { L.tourDone = true; closeModal(); persist(); } else tour(+v); }
