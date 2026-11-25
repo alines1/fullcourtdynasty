@@ -231,7 +231,7 @@
   function claimSchool(L, tid, coachName) {
     L.userTid = tid;
     L.coach = { name: coachName || "Coach", w: 0, l: 0, seasons: 0, ctTitles: 0, apps: 0, ff: 0, titles: 0, start: L.season, schools: [tid] };
-    L.news = []; news(L, `Coach ${L.coach.name} takes over at ${L.teams[tid].region}.`);
+    L.news = []; news(L, `${L.coach.name && L.coach.name !== "Coach" ? "Coach " + L.coach.name : "A new coach"} takes over at ${L.teams[tid].region}.`);
     return L;
   }
 
@@ -941,7 +941,7 @@
   const GSTATS = [["pts", "Points"], ["reb", "Rebounds"], ["ast", "Assists"], ["stl", "Steals"], ["blk", "Blocks"], ["tpm", "Threes made"]];
   const SSTATS = [["ppg", "Points per game"], ["rpg", "Rebounds per game"], ["apg", "Assists per game"], ["spg", "Steals per game"], ["bpg", "Blocks per game"], ["pts", "Total points"], ["tpm", "Threes made"]];
   const CSTATS = [["pts", "Points"], ["reb", "Rebounds"], ["ast", "Assists"], ["stl", "Steals"], ["blk", "Blocks"], ["tpm", "Threes made"], ["gp", "Games played"]];
-  const TOPN = 10;
+  const TOPN = 25; // single-game and record lists keep the top 25
   function rb(L) {
     if (!L.rb) L.rb = { game: {}, season: {}, career: {}, team: { gpts: [], margin: [], wins: [], pct: [], streak: [], ppg: [] } };
     return L.rb;
