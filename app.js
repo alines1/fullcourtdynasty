@@ -1013,7 +1013,7 @@
     const mode = S.recMode || "schools";
     const seg = `<span class="seg"><button class="${mode === "schools" ? "on" : ""}" data-act="recmode:schools">Schools</button><button class="${mode === "confs" ? "on" : ""}" data-act="recmode:confs">Conferences</button></span>`;
     if (mode === "confs") return confRecords(seg, seasons);
-    const opts = seg + `<select id="recConf" class="btn" aria-label="Conference"><option value="all">All teams</option>${L.confs.map((c) => `<option value="${c.cid}" ${scope === String(c.cid) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
+    const opts = seg + (mode === "confs" ? "" : `<label for="recConf" class="small mute">Conference</label>`) + `<select id="recConf" class="btn" aria-label="Conference"><option value="all">All conferences</option>${L.confs.map((c) => `<option value="${c.cid}" ${scope === String(c.cid) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
     return phead("Program records", seasons ? `Totals across the ${seasons} completed season${seasons === 1 ? "" : "s"} in this league · click a column to sort` : "Fills in as seasons are completed", opts) +
       (seasons ? table("records", cols, sorted, { def, presorted: true, rc: (r) => (r.tid === L.userTid ? "me" : "") }) : `<div class="card"><p class="mute">Finish your first season to start the record book.</p></div>`);
   }
@@ -1033,9 +1033,9 @@
     const A = L.awards || {}, H = new Map(L.history.map((h) => [h.season, h]));
     const ys = new Set(L.history.map((h) => h.season)); for (const s in A) if (A[s].poy || A[s].mop) ys.add(+s);
     const rows = [...ys].sort((x, y) => y - x).map((y) => { const h = H.get(y), a = A[y] || {};
-      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h ? `<b>${tlink(h.champ, { rank: false })}</b><div class="small mute">over ${esc(T(h.runner).region)}</div>` : "–"}</td><td class="l small">${h ? h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ") : "–"}</td>${awardCell(a.poy)}${awardCell(a.foy)}${awardCell(a.mop, a.mop ? `${a.mop.tppg} ppg · ${a.mop.trpg} rpg in ${a.mop.tg} tournament games` : "")}</tr>`; }).join("");
+      return `<tr><td class="l"><b>${seasonGo(y)}</b></td><td class="l">${h ? `<b>${tlink(h.champ, { rank: false })}</b>` : "–"}</td><td class="l">${h ? tlink(h.runner, { rank: false }) : "–"}</td><td class="l small">${h ? h.ff.filter((t) => t !== h.champ && t !== h.runner).map((t) => tlink(t, { rank: false })).join(", ") : "–"}</td>${awardCell(a.poy)}${awardCell(a.foy)}${awardCell(a.mop, a.mop ? `${a.mop.tppg} ppg · ${a.mop.trpg} rpg in ${a.mop.tg} tournament games` : "")}</tr>`; }).join("");
     return phead("National awards & champions", "National") + `
-      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">National champion</th><th class="l">Other Final Weekend teams</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament MOP</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
+      <div class="card">${rows ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">National champion</th><th class="l">Runner-up</th><th class="l">Other Final Weekend teams</th><th class="l">Player of the Year</th><th class="l">Freshman of the Year</th><th class="l">Tournament MOP</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mute small">Click a season for its full summary.</p>` : `<p class="mute">Filled in as the first season goes.</p>`}</div>`;
   }
 
 
@@ -1061,6 +1061,16 @@
   }
 
   // ---------- render ----------
+  // Title Case for column headers and section headings ("Player of the Year", "Tournament Bids")
+  const SMALL = new Set(["a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "vs", "vs.", "per", "via", "from"]);
+  function titleCase(s) {
+    return s.split(" ").map((w, i) => {
+      if (!w || /^[^A-Za-z]/.test(w) || /[A-Z]/.test(w.split("-")[0].slice(1))) return w; // leave acronyms, numbers and symbols alone (eFG%, 3PA, #)
+      if (i > 0 && SMALL.has(w.toLowerCase())) return w.toLowerCase();
+      return w.split("-").map((p) => (p ? p[0].toUpperCase() + p.slice(1) : p)).join("-");
+    }).join(" ");
+  }
+  const headCase = (html) => html.replace(/<(th|h3)((?:\s[^>]*)?)>([^<]+)</g, (m, tag, attrs, txt) => `<${tag}${attrs}>${titleCase(txt)}<`);
   function render() {
     if (L) refreshRanks();
     shell();
@@ -1099,7 +1109,7 @@
     const same = S._lastView === S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "");
     const keepX = {}, keepY = same ? window.scrollY : 0;
     if (same) for (const el of $("main").querySelectorAll(".scroll[data-tk]")) keepX[el.dataset.tk] = el.scrollLeft;
-    $("main").innerHTML = html;
+    $("main").innerHTML = headCase(html);
     if (same) { for (const el of $("main").querySelectorAll(".scroll[data-tk]")) if (keepX[el.dataset.tk]) el.scrollLeft = keepX[el.dataset.tk]; window.scrollTo(0, keepY); }
     S._lastView = S.view + ":" + (S.tid ?? "") + ":" + (S.pid ?? "") + ":" + (S.gid ?? "");
     requestAnimationFrame(() => B.drawAll($("main")));
@@ -1347,7 +1357,7 @@
       <div class="tools"><button class="btn play" data-act="close">Let's go</button></div>`);
   }
   function valid(d) { return d && d.v === 2 && Array.isArray(d.teams) && Array.isArray(d.players) && Array.isArray(d.games) && typeof d.userTid === "number" && d.teams[d.userTid]; }
-  function modal(html) { $("modalBody").innerHTML = html; $("modal").classList.add("open"); }
+  function modal(html) { $("modalBody").innerHTML = headCase(html); $("modal").classList.add("open"); }
   function closeModal() { $("modal").classList.remove("open"); }
   function closeMenu() { const m = $("playMenu"); if (m) { m.classList.remove("open"); $("playBtn")?.setAttribute("aria-expanded", "false"); } }
 
