@@ -1139,9 +1139,20 @@
   }
 
   // ---------- season end / offseason ----------
+  // championship rings: every player on the roster gets the team's titles on his profile
+  function teamTitles(L) {
+    const N = L.ncaa, onTeam = (tid) => L.players.filter((p) => p.tid === tid);
+    for (const c of L.confs) {
+      const reg = confStandings(L, c.cid)[0].tid, ct = L.ct && L.ct[c.cid] ? L.ct[c.cid].champ : null;
+      for (const p of onTeam(reg)) give(L, p, c.abbrev + " Regular Season Champion");
+      if (ct != null) for (const p of onTeam(ct)) give(L, p, c.abbrev + " Tournament Champion");
+    }
+    if (N && N.champ != null) for (const p of onTeam(N.champ)) give(L, p, "National Champion");
+  }
   function endSeason(L) {
     const N = L.ncaa, u = L.userTid;
     if (!L.awards) L.awards = {};
+    teamTitles(L);
     nationalAwards(L);
     seasonRecords(L);
     decideDepartures(L); // before signing day, so programs losing players early have room for late signees

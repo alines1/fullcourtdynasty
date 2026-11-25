@@ -281,12 +281,13 @@
   const playerLink = (x) => { if (!x) return "–"; const live = L.players.some((p) => p.pid === x.pid) || (L.alumni && L.alumni[x.pid]); return live ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name); };
 
   // award pills: repeats grouped ("2x National Player of the Year"), national player of the year in gold
-  const AW_ORDER = (n) => (n === "National Player of the Year" ? 0 : n.startsWith("National") ? 1 : n.startsWith("Tournament") ? 2 : 3);
+  const GOLD = new Set(["National Player of the Year", "National Champion"]);
+  const AW_ORDER = (n) => (n === "National Champion" ? 0 : n === "National Player of the Year" ? 1 : n.startsWith("National") ? 2 : n.startsWith("Tournament") ? 3 : /Champion$/.test(n) ? 4 : 5);
   function awardPills(list) {
     if (!list || !list.length) return "";
     const by = new Map(); for (const x of list) { if (!by.has(x.a)) by.set(x.a, []); by.get(x.a).push(x.s); }
     const items = [...by.entries()].sort((x, y) => AW_ORDER(x[0]) - AW_ORDER(y[0]) || y[1].length - x[1].length || x[1][0] - y[1][0]);
-    return `<div class="awards">${items.map(([n, ss]) => `<span class="pill aw${n === "National Player of the Year" ? " gold" : ""}" title="${esc(ss.map(seasonLabel).join(", "))}">${ss.length > 1 ? `${ss.length}x ${esc(n)}` : `${seasonLabel(ss[0])} ${esc(n)}`}</span>`).join("")}</div>`;
+    return `<div class="awards">${items.map(([n, ss]) => `<span class="pill aw${GOLD.has(n) ? " gold" : ""}" title="${esc(ss.map(seasonLabel).join(", "))}">${ss.length > 1 ? `${ss.length}x ${esc(n)}` : `${seasonLabel(ss[0])} ${esc(n)}`}</span>`).join("")}</div>`;
   }
   // ---------- a team's roster in a past season ----------
   function seasonOptions(tid, sel) {
@@ -886,7 +887,7 @@
   }
   function programRecordsCard(t) {
     const b = t.best || {};
-    const row = (lab, e, fmt, sub) => (e ? `<tr><td class="l mute">${lab}</td><td><b>${fmt(e.v)}</b></td><td class="l">${e.pid != null ? playerLink(e) : ""} <span class="mute small">${sub(e)}</span></td></tr>` : "");
+    const row = (lab, e, fmt, sub) => (e ? `<tr><td class="l mute">${lab}</td><td class="num"><b>${fmt(e.v)}</b></td><td class="l">${e.pid != null ? playerLink(e) : ""} <span class="mute small">${sub(e)}</span></td></tr>` : "");
     const n0 = (v) => num(v), n1 = (v) => v.toFixed(1);
     const rows = row("Points, game", b.g_pts, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Rebounds, game", b.g_reb, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Assists, game", b.g_ast, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Threes, game", b.g_tpm, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`)
       + row("Points per game, season", b.s_ppg, n1, (e) => seasonLabel(e.season)) + row("Rebounds per game, season", b.s_rpg, n1, (e) => seasonLabel(e.season)) + row("Assists per game, season", b.s_apg, n1, (e) => seasonLabel(e.season))
