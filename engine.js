@@ -78,7 +78,10 @@
   const townGeo = (i) => [TW.la[i] / 100, TW.lo[i] / 100];
   function pickHome() {
     const T = towns();
-    if (!T || R() < INTL_SHARE) return { town: pick(INTL), geo: null };
+    if (!T || R() < INTL_SHARE) {
+      if (NM && NM.INTL) { const g = wpick(NM.INTL, (x) => x[1]); return { town: pick(g[2]), geo: null, c: g[0], nf: g[3], nl: g[4] }; }
+      return { town: pick(INTL), geo: null };
+    }
     const x = R() * T.tot; let lo = 0, hi = T.n - 1;
     while (lo < hi) { const m = (lo + hi) >> 1; if (T.cum[m] < x) lo = m + 1; else hi = m; }
     return { town: townName(lo), geo: townGeo(lo) };
@@ -139,7 +142,7 @@
     for (const k of RKEYS) r[k] = Math.round(clamp(talent + ARCH[pos][k] + gauss(0, 7), 10, 99));
     const hr = HGT[pos];
     const home = pickHome();
-    const p = { pid: L.nextPid++, tid, first: pick(FIRST), last: pick(LAST), pos, yr, hgt: rint(hr[0], hr[1]), town: home.town, geo: home.geo, r, ovr: calcOvr(r), pot: 0, stats: {}, depth: 99, jersey: rint(0, 55) };
+    const p = { pid: L.nextPid++, tid, first: pick(home.nf || (NM && NM.US_FIRST) || FIRST), last: pick(home.nl || (NM && NM.US_LAST) || LAST), pos, yr, hgt: rint(hr[0], hr[1]), town: home.town, geo: home.geo, r, ovr: calcOvr(r), pot: 0, stats: {}, depth: 99, jersey: rint(0, 55) };
     p.pot = Math.round(clamp(p.ovr + (room ?? [0, 14, 9, 5, 2][yr]) + gauss(0, 4), p.ovr, 99));
     return p;
   }
