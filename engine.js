@@ -1343,6 +1343,7 @@
     for (const p of L.players) {
       const medical = p.inj && p.inj.g === 99 && p.inj.s === L.season && (p.stats[L.season]?.gp || 0) <= 9 && !p.rsUsed && !p.rs;
       const d = progress(p);
+      p.dOvr = d; // change in overall from last season, shown next to his rating
       if (p.rs || medical) { p.rsUsed = true; p.rs = false; if (p.tid === u) recap.redshirts.push({ name: p.first + " " + p.last, medical }); }
       else p.yr++;
       delete p.inj; delete p.leave;

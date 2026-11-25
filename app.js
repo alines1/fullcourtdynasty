@@ -19,6 +19,8 @@
   const isLight = (c) => { const hx = col(c).replace("#", ""); if (hx.length !== 6) return false; const l = [0, 2, 4].map((i) => parseInt(hx.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return l[0] * 0.2126 + l[1] * 0.7152 + l[2] * 0.0722 > 0.36; };
   const logo = (t, sz = 42) => `<span class="logo" style="color:${isLight(t.c1) ? "#15171a" : "#fff"};background:${col(t.c1)};width:${sz}px;height:${sz}px;font-size:${Math.round(sz * (t.abbrev.length > 4 ? 0.25 : t.abbrev.length > 3 ? 0.3 : 0.36))}px">${esc(t.abbrev)}</span>`;
   const curStats = (p) => p.stats[L.season];
+  // rating change since last season: green up, red down (nothing for newcomers)
+  const dOvr = (p) => (p.dOvr == null || p.dOvr === 0 ? "" : ` <span class="dovr ${p.dOvr > 0 ? "up" : "dn"}" title="Change since last season">${p.dOvr > 0 ? "+" : "−"}${Math.abs(p.dOvr)}</span>`);
   const coachName = () => (L.coach && L.coach.name && L.coach.name !== "Coach" ? "Coach " + L.coach.name : "Your coach");
   const clsOf = (p) => E.classLabel(p);
   const statusPill = (p) => (p.inj ? `<span class="pill inj" title="${esc(p.inj.type)}">${p.inj.g === 99 ? "Out for season" : `Out ${p.inj.g} g`}</span>` : "") + (p.rs ? `<span class="pill rsp" title="Sitting out this season to save a year of eligibility">Redshirt</span>` : "") + (p.portal ? `<span class="pill inj" title="Entered the transfer portal">In portal</span>` : "") + (p.transfer ? `<span class="pill" title="Joined as a transfer">Transfer</span>` : "");
@@ -224,7 +226,7 @@
       { k: "hgt", h: "Ht", f: (p) => hgt(p.hgt) },
       { k: "town", h: "Hometown", l: 1, v: (p) => p.town, f: (p) => `<span class="mute">${esc(p.town)}</span>` },
       { k: "mpg", h: "Min", t: "Planned minutes from rotation spot", v: (p) => E.MINUTES[p.depth] || 0, f: (p) => E.MINUTES[p.depth] || 0 },
-      { k: "ovr", h: "Ovr", f: (p) => `<b>${p.ovr}</b>` }, { k: "pot", h: "Pot" },
+      { k: "ovr", h: "Ovr", f: (p) => `<b>${p.ovr}</b>${dOvr(p)}` }, { k: "pot", h: "Pot" },
     ];
     const extra = [["gp", "GP"], ["min", "MPG"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]].map(([k, h]) => ({ k, h, v: (p) => statVal(curStats(p), k), f: (p) => (k === "gp" ? curStats(p)?.gp || 0 : f1(statVal(curStats(p), k))) }))
         .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s && s[a] ? s[m] / s[a] : -1; }, f: (p) => { const s = curStats(p); return s ? pct(s[m], s[a]) : "–"; } })));
@@ -257,7 +259,7 @@
     const rsBtn = p.tid === L.userTid && L.phase === "regular" ? (p.rs ? `<button class="btn sm" data-act="rs:${p.pid}:0">Remove redshirt</button>` : E.canRedshirt(L, p) ? `<button class="btn sm" data-act="rs:${p.pid}:1">Redshirt this season</button>` : "") : "";
     return teamHead(p.tid, esc(p.first + " " + p.last), `${p.pos} · ${clsOf(p)} · #${p.jersey} · ${tlink(p.tid, { full: 1 })} ${statusPill(p)}`, `${rsBtn}<button class="btn sm" data-go="team:${p.tid}">${esc(t.abbrev)} roster</button>`) + `
       ${awardPills(p.awards)}
-      <div class="kpis">${kpi("Overall", p.ovr, "current rating")}${kpi("Potential", p.pot, "rough ceiling")}${kpi("Points", cur && cur.gp ? f1(cur.pts / cur.gp) : "–", "per game")}${kpi("Rebounds", cur && cur.gp ? f1((cur.orb + cur.drb) / cur.gp) : "–", "per game")}${kpi("Assists", cur && cur.gp ? f1(cur.ast / cur.gp) : "–", "per game")}${kpi("Games", cur ? cur.gp : 0, cur ? `${cur.gs} starts` : "this season")}</div>
+      <div class="kpis">${kpi("Overall", `${p.ovr}${dOvr(p)}`, p.dOvr ? "change since last season" : "current rating")}${kpi("Potential", p.pot, "rough ceiling")}${kpi("Points", cur && cur.gp ? f1(cur.pts / cur.gp) : "–", "per game")}${kpi("Rebounds", cur && cur.gp ? f1((cur.orb + cur.drb) / cur.gp) : "–", "per game")}${kpi("Assists", cur && cur.gp ? f1(cur.ast / cur.gp) : "–", "per game")}${kpi("Games", cur ? cur.gp : 0, cur ? `${cur.gs} starts` : "this season")}</div>
       <div class="dash"><div class="s8 stackcol"><div class="card"><h3>Season by season</h3>${seasons.length ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>GS</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG%</th><th>3P%</th><th>FT%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div>` : `<p class="mute">Hasn't played yet.</p>`}</div>
       <div class="card"><h3>Game log</h3>${logT}</div></div>
       <div class="s4 stackcol"><div class="card"><h3>Profile</h3>${prof}</div><div class="card"><h3>Ratings</h3><div class="bars">${bars}</div></div></div></div>`;
@@ -730,6 +732,8 @@
     const N = L.ncaa || projField();
     const u = L.userTid, us = N.seedOf[u];
     const wide = window.innerWidth >= 1700;
+    // when the Final Weekend starts, jump to it once (the person can still switch tabs)
+    if (L.ncaa && !N.projected && L.ncaa.stage >= E.NCAA_ROUNDS.indexOf("Final Weekend") && S.ffShown !== L.season) { S.ffShown = L.season; S.br = "ff"; }
     const view = S.br ?? (wide ? "full" : "r" + Math.max(0, regionOf(N, u)));
     const tabs = [["full", "Full bracket"], ...E.REGIONS.map((r, i) => ["r" + i, r]), ["ff", "Final Weekend"], ["or", "Opening Round"], ["field", "Field"]];
     let body;
