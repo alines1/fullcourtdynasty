@@ -136,6 +136,8 @@
     }
     return out;
   }
+  // whole numbers with thousands separators (1,234); never use it for years
+  const num = (v) => Math.round(v).toLocaleString("en-US");
   function kpi(label, value, sub, cls) { return `<div class="kpi"><span>${label}</span><b class="${cls || ""}">${value}</b>${sub ? `<em>${sub}</em>` : ""}</div>`; }
   function vHome() {
     const u = L.userTid, t = T(u), ng = nextGame(), r = L.rec[u];
@@ -253,7 +255,7 @@
       <tr><td class="l mute">Rotation</td><td class="l">${p.depth + 1}${p.depth < 5 ? " · starter" : ""} · ${E.MINUTES[p.depth] || 0} planned min</td></tr></tbody></table>`;
     const rsBtn = p.tid === L.userTid && L.phase === "regular" ? (p.rs ? `<button class="btn sm" data-act="rs:${p.pid}:0">Remove redshirt</button>` : E.canRedshirt(L, p) ? `<button class="btn sm" data-act="rs:${p.pid}:1">Redshirt this season</button>` : "") : "";
     return teamHead(p.tid, esc(p.first + " " + p.last), `${p.pos} · ${clsOf(p)} · #${p.jersey} · ${tlink(p.tid, { full: 1 })} ${statusPill(p)}`, `${rsBtn}<button class="btn sm" data-go="team:${p.tid}">${esc(t.abbrev)} roster</button>`) + `
-      ${p.awards && p.awards.length ? `<div class="awards">${p.awards.map((x) => `<span class="pill aw">${seasonLabel(x.s)} ${esc(x.a)}</span>`).join("")}</div>` : ""}
+      ${awardPills(p.awards)}
       <div class="kpis">${kpi("Overall", p.ovr, "current rating")}${kpi("Potential", p.pot, "rough ceiling")}${kpi("Points", cur && cur.gp ? f1(cur.pts / cur.gp) : "–", "per game")}${kpi("Rebounds", cur && cur.gp ? f1((cur.orb + cur.drb) / cur.gp) : "–", "per game")}${kpi("Assists", cur && cur.gp ? f1(cur.ast / cur.gp) : "–", "per game")}${kpi("Games", cur ? cur.gp : 0, cur ? `${cur.gs} starts` : "this season")}</div>
       <div class="dash"><div class="s8 stackcol"><div class="card"><h3>Season by season</h3>${seasons.length ? `<div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>GS</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG%</th><th>3P%</th><th>FT%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div>` : `<p class="mute">Hasn't played yet.</p>`}</div>
       <div class="card"><h3>Game log</h3>${logT}</div></div>
@@ -269,12 +271,20 @@
     const srow = (y) => { const s = a.stats[y]; return `<tr><td class="l">${seasonLabel(y)}</td><td class="l">${esc(L.teams[s.tid]?.abbrev || "")}</td><td>${s.gp}</td><td>${f1(pg(s, "min"))}</td><td>${f1(pg(s, "pts"))}</td><td>${f1((s.orb + s.drb) / (s.gp || 1))}</td><td>${f1(pg(s, "ast"))}</td><td>${pct(s.fgm, s.fga)}</td><td>${pct(s.tpm, s.tpa)}</td></tr>`; };
     const pro = a.pro ? `Drafted No. ${a.pro.pick} overall (round ${a.pro.round}) by the ${esc(a.pro.team)} in ${a.pro.season}` : a.how === "early" ? "Left early for the pros; went undrafted" : "Graduated; went undrafted";
     return teamHead(a.tid, esc(a.first + " " + a.last), `${a.pos} · ${esc(a.school)} · left ${seasonLabel(a.left)} (${a.how === "early" ? "early entry" : "graduated"})`, `<button class="btn sm" data-go="progh:${a.tid}">${esc(T(a.tid).abbrev)} history</button>`) + `
-      ${a.awards && a.awards.length ? `<div class="awards">${a.awards.map((x) => `<span class="pill aw">${seasonLabel(x.s)} ${esc(x.a)}</span>`).join("")}</div>` : ""}
-      <div class="kpis">${kpi("After college", a.pro ? "Pick " + a.pro.pick : "Undrafted", a.pro ? esc(a.pro.team) : "")}${kpi("Career points", c.pts, f1(c.pts / gp) + " per game")}${kpi("Rebounds", c.reb, f1(c.reb / gp) + " per game")}${kpi("Assists", c.ast, f1(c.ast / gp) + " per game")}${kpi("Games", c.gp, c.seasons + " seasons")}${kpi("Final rating", a.ovr, "potential " + a.pot)}</div>
+      ${awardPills(a.awards)}
+      <div class="kpis">${kpi("After college", a.pro ? "Pick " + a.pro.pick : "Undrafted", a.pro ? esc(a.pro.team) : "")}${kpi("Career points", num(c.pts), f1(c.pts / gp) + " per game")}${kpi("Rebounds", num(c.reb), f1(c.reb / gp) + " per game")}${kpi("Assists", num(c.ast), f1(c.ast / gp) + " per game")}${kpi("Games", num(c.gp), c.seasons + " seasons")}${kpi("Final rating", a.ovr, "potential " + a.pot)}</div>
       <div class="card"><h3>College career</h3><p class="mute small">${pro}. From ${esc(a.town)}${a.stars ? " · " + a.stars + "★ recruit" : ""}.</p><div class="scroll"><table><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>FG%</th><th>3P%</th></tr></thead><tbody>${seasons.map(srow).join("")}</tbody></table></div></div>`;
   }
   const playerLink = (x) => { if (!x) return "–"; const live = L.players.some((p) => p.pid === x.pid) || (L.alumni && L.alumni[x.pid]); return live ? `<a data-go="player:${x.pid}">${esc(x.name)}</a>` : esc(x.name); };
 
+  // award pills: repeats grouped ("2x National Player of the Year"), national player of the year in gold
+  const AW_ORDER = (n) => (n === "National Player of the Year" ? 0 : n.startsWith("National") ? 1 : n.startsWith("Tournament") ? 2 : 3);
+  function awardPills(list) {
+    if (!list || !list.length) return "";
+    const by = new Map(); for (const x of list) { if (!by.has(x.a)) by.set(x.a, []); by.get(x.a).push(x.s); }
+    const items = [...by.entries()].sort((x, y) => AW_ORDER(x[0]) - AW_ORDER(y[0]) || y[1].length - x[1].length || x[1][0] - y[1][0]);
+    return `<div class="awards">${items.map(([n, ss]) => `<span class="pill aw${n === "National Player of the Year" ? " gold" : ""}" title="${esc(ss.map(seasonLabel).join(", "))}">${ss.length > 1 ? `${ss.length}x ${esc(n)}` : `${seasonLabel(ss[0])} ${esc(n)}`}</span>`).join("")}</div>`;
+  }
   // ---------- schedule / box ----------
   function vSchedule(tid) {
     tid = tid ?? L.userTid;
@@ -419,7 +429,7 @@
     const recs = [];
     const R0 = L.rb || {};
     for (const [k, lab] of E.GSTATS) for (const [i, e] of (R0.game?.[k] || []).entries()) if (e.season === s && i < 1) recs.push(`<li>New single-game record, ${lab.toLowerCase()}: <b>${e.v}</b> by ${playerLink(e)} (${esc(e.team)}) vs. ${esc(e.opp)}</li>`);
-    for (const [k, lab] of E.SSTATS) for (const [i, e] of (R0.season?.[k] || []).entries()) if (e.season === s && i < 1) recs.push(`<li>New single-season record, ${lab.toLowerCase()}: <b>${Number.isInteger(e.v) ? e.v : e.v.toFixed(1)}</b> by ${playerLink(e)} (${esc(e.team)})</li>`);
+    for (const [k, lab] of E.SSTATS) for (const [i, e] of (R0.season?.[k] || []).entries()) if (e.season === s && i < 1) recs.push(`<li>New single-season record, ${lab.toLowerCase()}: <b>${Number.isInteger(e.v) ? num(e.v) : e.v.toFixed(1)}</b> by ${playerLink(e)} (${esc(e.team)})</li>`);
     for (const [k, lab] of [["wins", "wins"], ["streak", "win streak"]]) for (const [i, e] of (R0.team?.[k] || []).entries()) if (e.season === s && i < 1) recs.push(`<li>Most ${lab} in a season: <b>${e.v}</b> by ${esc(e.team)} (${esc(e.rec)})</li>`);
     return phead(`${seasonLabel(s)} season summary`, `${esc(T(h.champ).region)} won the national championship`, sel) + `
       <div class="dash"><div class="s6"><div class="card hero"><div class="cardh"><h3>Champions</h3></div><table class="tape"><tbody>
@@ -479,7 +489,7 @@
         { k: "name", h: "Player", l: 1, v: (r) => r.name, f: (r) => playerLink({ pid: r.pid, name: r.name }) + (r.active && B.view === "career" ? ` <span class="pill">active</span>` : "") },
         { k: "team", h: "Team", l: 1, v: (r) => T(r.tid).region, f: (r) => tlink(r.tid, { rank: false }) },
         B.view === "season" ? { k: "season", h: "Season", l: 1, f: (r) => seasonLabel(r.season) + (r.season === L.season && L.phase !== "offseason" ? ` <span class="mute">(now)</span>` : "") } : { k: "season", h: "Years", l: 1, f: (r) => (r.yrs > 1 ? `${r.season}–${String(r.last + 1).slice(2)}` : seasonLabel(r.season)) },
-      ].concat(BK_STATS.map(([k, h]) => ({ k, h, v: (r) => val(r, k), f: (r) => (k === "gp" || !pg ? Math.round(val(r, k)) : f1(val(r, k))) })))
+      ].concat(BK_STATS.map(([k, h]) => ({ k, h, v: (r) => val(r, k), f: (r) => (k === "gp" || !pg ? num(val(r, k)) : f1(val(r, k))) })))
        .concat(PCT.map(([k, h, m, att]) => ({ k, h, v: (r) => (r[att] ? r[m] / r[att] : -1), f: (r) => (r[att] ? ((r[m] / r[att]) * 100).toFixed(1) : "–") })));
       def = { k: "pts", d: -1 };
       note = `${pg ? `Per-game lists need ${minGp}+ games. ` : ""}Includes every player now in college, every former player from your program, and former players who were drafted, won an award or hold a record.`;
@@ -713,7 +723,7 @@
     const tot = S.st.mode === "tot";
     const sv = (p, k) => { const s = curStats(p); const v = k === "reb" ? s.orb + s.drb : s[k]; return tot ? v : v / s.gp; };
     const cols = [{ k: "name", h: "Name", l: 1, v: (p) => p.last, f: (p) => plink(p) }, { k: "team", h: "Team", l: 1, v: (p) => T(p.tid).abbrev, f: (p) => `<a data-go="team:${p.tid}">${esc(T(p.tid).abbrev)}</a>` }, { k: "pos", h: "Pos", v: (p) => E.POS.indexOf(p.pos), f: (p) => p.pos }, { k: "yr", h: "Yr", v: (p) => p.yr, f: (p) => E.YR[p.yr] || "GR" }, { k: "ovr", h: "Ovr" }, { k: "gp", h: "GP", v: (p) => curStats(p).gp, f: (p) => curStats(p).gp }]
-      .concat(["min", "pts", "reb", "ast", "stl", "blk", "tov"].map((k) => ({ k, h: k === "tov" ? "TO" : k.toUpperCase(), v: (p) => sv(p, k), f: (p) => (tot ? Math.round(sv(p, k)) : f1(sv(p, k))) })))
+      .concat(["min", "pts", "reb", "ast", "stl", "blk", "tov"].map((k) => ({ k, h: k === "tov" ? "TO" : k.toUpperCase(), v: (p) => sv(p, k), f: (p) => (tot ? num(sv(p, k)) : f1(sv(p, k))) })))
       .concat([["fg", "FG%", "fgm", "fga"], ["tp", "3P%", "tpm", "tpa"], ["ft", "FT%", "ftm", "fta"]].map(([k, h, m, a]) => ({ k, h, v: (p) => { const s = curStats(p); return s[a] >= 20 ? s[m] / s[a] : -1; }, f: (p) => pct(curStats(p)[m], curStats(p)[a]) })));
     const scopeSel = sc === "team" || sc === "all" ? "" : confSel(+sc);
     const title = sc === "team" ? `${esc(T(u).region)} stats` : sc === "all" ? "National leaders" : `${esc(L.confs[+sc].abbrev)} leaders`;
@@ -803,7 +813,7 @@
   function programRecordsCard(t) {
     const b = t.best || {};
     const row = (lab, e, fmt, sub) => (e ? `<tr><td class="l mute">${lab}</td><td><b>${fmt(e.v)}</b></td><td class="l">${e.pid != null ? playerLink(e) : ""} <span class="mute small">${sub(e)}</span></td></tr>` : "");
-    const n0 = (v) => v, n1 = (v) => v.toFixed(1);
+    const n0 = (v) => num(v), n1 = (v) => v.toFixed(1);
     const rows = row("Points, game", b.g_pts, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Rebounds, game", b.g_reb, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Assists, game", b.g_ast, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`) + row("Threes, game", b.g_tpm, n0, (e) => `vs. ${esc(e.opp)}, ${seasonLabel(e.season)}`)
       + row("Points per game, season", b.s_ppg, n1, (e) => seasonLabel(e.season)) + row("Rebounds per game, season", b.s_rpg, n1, (e) => seasonLabel(e.season)) + row("Assists per game, season", b.s_apg, n1, (e) => seasonLabel(e.season))
       + row("Career points", b.c_pts, n0, (e) => `through ${seasonLabel(e.last)}`) + row("Career rebounds", b.c_reb, n0, (e) => `through ${seasonLabel(e.last)}`) + row("Career assists", b.c_ast, n0, (e) => `through ${seasonLabel(e.last)}`)
@@ -1011,7 +1021,7 @@
     else if (k === "reroll") { S.coachName = $("coachName")?.value || S.coachName; WORLD = E.newWorld(S.pack || undefined); render(); }
     else if (k === "newleague") modal(`<h2>Start a new league?</h2><p>Your current save will be replaced. Export it first if you want to keep it.</p><div class="tools"><button class="btn play" data-act="confirmnew">Start over</button><button class="btn" data-act="close">Cancel</button></div>`);
     else if (k === "confirmnew") { closeModal(); S.coachName = L.coach.name; L = null; WORLD = E.newWorld(S.pack || undefined); render(); }
-    else if (k === "export") { modal(`<h2>Export save</h2><p class="mute">Preparing…</p>`); encodeSave().then((s) => modal(`<h2>Export save</h2><p class="mute">Copy this text and keep it somewhere safe (${Math.round(s.length / 1024)} KB). Paste it into Import to restore.</p><textarea id="expTxt" readonly>${esc(s)}</textarea><div class="tools" style="margin-top:10px"><button class="btn play" data-act="copy">Copy</button><button class="btn" data-act="close">Close</button></div>`)); }
+    else if (k === "export") { modal(`<h2>Export save</h2><p class="mute">Preparing…</p>`); encodeSave().then((s) => modal(`<h2>Export save</h2><p class="mute">Copy this text and keep it somewhere safe (${num(s.length / 1024)} KB). Paste it into Import to restore.</p><textarea id="expTxt" readonly>${esc(s)}</textarea><div class="tools" style="margin-top:10px"><button class="btn play" data-act="copy">Copy</button><button class="btn" data-act="close">Close</button></div>`)); }
     else if (k === "copy") { const tx = $("expTxt"); try { navigator.clipboard.writeText(tx.value).then(() => toast("Copied"), () => { tx.select(); toast("Select all and copy"); }); } catch (e) { tx.select(); toast("Select all and copy"); } }
     else if (k === "import") modal(`<h2>Import save</h2><p class="mute">Paste an exported save. It replaces the current league.</p><textarea id="impTxt"></textarea><p id="impErr" class="L"></p><div class="tools"><button class="btn play" data-act="doimport">Load save</button><button class="btn" data-act="close">Cancel</button></div>`);
     else if (k === "doimport") { decodeSave($("impTxt").value.trim()).then((d) => { if (!valid(d)) throw new Error(); L = d; WORLD = null; closeModal(); S.view = "home"; render(); persist(); toast("Save loaded"); }).catch(() => { $("impErr").textContent = "That doesn't look like a Full Court Dynasty save."; }); }
